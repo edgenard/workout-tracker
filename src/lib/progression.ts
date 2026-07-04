@@ -235,6 +235,30 @@ export function applyResults(
   return next
 }
 
+/** Total reps in the movement's current target (per-arm/per-leg work counted per limb) */
+export function movementReps(p: ProgressionState, m: MovementId): number {
+  switch (m) {
+    case 'swing':
+      return p.swing.repsPerMinute * p.swing.minutes
+    case 'tgu':
+      return p.tgu.minutes // 1 rep per minute
+    case 'pullover':
+      return LIMITS.pulloverSets * p.pullover.reps
+    case 'cleanPress':
+      return ladderReps(p.cleanPress.ladderTop) * p.cleanPress.ladders * 2 // left + right
+    case 'squat':
+      return p.squat.repsPerMinute * p.squat.minutes
+    case 'splitSquat':
+      return LIMITS.splitSquatSets * LIMITS.splitSquatReps * 2 // both legs
+  }
+}
+
+/** Whether the movement is loaded with the bell at its current stage */
+export function movementUsesBell(p: ProgressionState, m: MovementId): boolean {
+  if (m === 'splitSquat') return p.splitSquat.level === SPLIT_SQUAT_LEVELS.length - 1
+  return true
+}
+
 /** Rungs for the clean & press ladder tracker, in order */
 export function ladderRungs(c: CleanPressState): Array<{ ladder: number; reps: number }> {
   const rungs: Array<{ ladder: number; reps: number }> = []

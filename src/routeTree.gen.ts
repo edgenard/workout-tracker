@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as ProgressRouteImport } from './routes/progress'
 import { Route as PlanRouteImport } from './routes/plan'
 import { Route as HistoryRouteImport } from './routes/history'
 import { Route as IndexRouteImport } from './routes/index'
@@ -18,6 +19,11 @@ import { Route as SessionDayRouteImport } from './routes/session.$day'
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProgressRoute = ProgressRouteImport.update({
+  id: '/progress',
+  path: '/progress',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PlanRoute = PlanRouteImport.update({
@@ -45,6 +51,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/history': typeof HistoryRoute
   '/plan': typeof PlanRoute
+  '/progress': typeof ProgressRoute
   '/settings': typeof SettingsRoute
   '/session/$day': typeof SessionDayRoute
 }
@@ -52,6 +59,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/history': typeof HistoryRoute
   '/plan': typeof PlanRoute
+  '/progress': typeof ProgressRoute
   '/settings': typeof SettingsRoute
   '/session/$day': typeof SessionDayRoute
 }
@@ -60,21 +68,31 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/history': typeof HistoryRoute
   '/plan': typeof PlanRoute
+  '/progress': typeof ProgressRoute
   '/settings': typeof SettingsRoute
   '/session/$day': typeof SessionDayRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/history' | '/plan' | '/settings' | '/session/$day'
+  fullPaths:
+    '/' | '/history' | '/plan' | '/progress' | '/settings' | '/session/$day'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/history' | '/plan' | '/settings' | '/session/$day'
-  id: '__root__' | '/' | '/history' | '/plan' | '/settings' | '/session/$day'
+  to: '/' | '/history' | '/plan' | '/progress' | '/settings' | '/session/$day'
+  id:
+    | '__root__'
+    | '/'
+    | '/history'
+    | '/plan'
+    | '/progress'
+    | '/settings'
+    | '/session/$day'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   HistoryRoute: typeof HistoryRoute
   PlanRoute: typeof PlanRoute
+  ProgressRoute: typeof ProgressRoute
   SettingsRoute: typeof SettingsRoute
   SessionDayRoute: typeof SessionDayRoute
 }
@@ -86,6 +104,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/progress': {
+      id: '/progress'
+      path: '/progress'
+      fullPath: '/progress'
+      preLoaderRoute: typeof ProgressRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/plan': {
@@ -123,6 +148,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   HistoryRoute: HistoryRoute,
   PlanRoute: PlanRoute,
+  ProgressRoute: ProgressRoute,
   SettingsRoute: SettingsRoute,
   SessionDayRoute: SessionDayRoute,
 }

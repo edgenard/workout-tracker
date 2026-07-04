@@ -1,4 +1,5 @@
-import { HeadContent, Link, Scripts, createRootRoute } from '@tanstack/react-router'
+import { useEffect, useState } from 'react'
+import { HeadContent, Link, Scripts, createRootRoute, useRouter } from '@tanstack/react-router'
 import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
 import { TanStackDevtools } from '@tanstack/react-devtools'
 
@@ -21,8 +22,59 @@ export const Route = createRootRoute({
   shellComponent: RootDocument,
 })
 
-const navLink =
-  'rounded-lg px-3 py-1.5 font-semibold text-zinc-400 hover:text-zinc-100 [&.active]:bg-zinc-800 [&.active]:text-emerald-400'
+const NAV_ITEMS: Array<{ to: string; label: string }> = [
+  { to: '/', label: 'Today' },
+  { to: '/history', label: 'History' },
+  { to: '/progress', label: 'Progress' },
+  { to: '/plan', label: 'Plan' },
+  { to: '/settings', label: 'Settings' },
+]
+
+function Nav() {
+  const router = useRouter()
+  // The prerendered SPA shell must carry no active state: hydration adopts the
+  // shell's DOM attributes as-is, so anything baked in at prerender time (when
+  // the location is '/') would stick. Start with no active link, then set it
+  // from the real URL after mount and after every completed navigation.
+  const [pathname, setPathname] = useState<string | null>(null)
+  useEffect(() => {
+    setPathname(window.location.pathname)
+    return router.subscribe('onResolved', () => setPathname(window.location.pathname))
+  }, [router])
+
+  // Strip the deploy basepath (e.g. /workout-tracker on GitHub Pages) so
+  // active states are computed against app-relative paths.
+  const base = router.options.basepath ?? '/'
+  let rel: string | null = null
+  if (pathname !== null) {
+    rel = base !== '/' && pathname.startsWith(base) ? pathname.slice(base.length) : pathname
+    if (!rel.startsWith('/')) rel = `/${rel}`
+  }
+
+  return (
+    <nav className="mx-auto flex max-w-3xl flex-wrap items-center gap-1 px-4 py-3">
+      <Link to="/" className="mr-auto text-lg font-black tracking-tight">
+        🏋️ Kettlebell<span className="text-emerald-400">Tracker</span>
+      </Link>
+      {NAV_ITEMS.map(({ to, label }) => {
+        const active = rel !== null && (to === '/' ? rel === '/' : rel.startsWith(to))
+        return (
+          <Link
+            key={to}
+            to={to}
+            className={`rounded-lg px-3 py-1.5 font-semibold ${
+              active
+                ? 'bg-zinc-800 text-emerald-400'
+                : 'text-zinc-400 hover:text-zinc-100'
+            }`}
+          >
+            {label}
+          </Link>
+        )
+      })}
+    </nav>
+  )
+}
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   return (
@@ -32,23 +84,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       </head>
       <body className="min-h-screen bg-zinc-950 text-zinc-100 antialiased">
         <header className="sticky top-0 z-10 border-b border-zinc-800 bg-zinc-950/90 backdrop-blur">
-          <nav className="mx-auto flex max-w-3xl flex-wrap items-center gap-1 px-4 py-3">
-            <Link to="/" className="mr-auto text-lg font-black tracking-tight">
-              🏋️ Kettlebell<span className="text-emerald-400">Tracker</span>
-            </Link>
-            <Link to="/" className={navLink} activeOptions={{ exact: true }}>
-              Today
-            </Link>
-            <Link to="/history" className={navLink}>
-              History
-            </Link>
-            <Link to="/plan" className={navLink}>
-              Plan
-            </Link>
-            <Link to="/settings" className={navLink}>
-              Settings
-            </Link>
-          </nav>
+          <Nav />
         </header>
         <main className="mx-auto max-w-3xl px-4 py-6">{children}</main>
         {import.meta.env.DEV && (

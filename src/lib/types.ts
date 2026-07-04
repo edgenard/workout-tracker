@@ -63,11 +63,24 @@ export interface ProgressionState {
   goodMorning: GoodMorningState
 }
 
+export type WeightUnit = 'kg' | 'lb'
+
+export interface BellState {
+  /** The working kettlebell's weight, in the unit below */
+  weight: number
+  unit: WeightUnit
+}
+
 export interface MovementResult {
   movement: MovementId
   /** Human-readable target that was attempted, frozen at log time */
   target: string
   hit: boolean
+  /** Total reps in the attempted target, frozen at log time (absent on legacy entries) */
+  reps?: number
+  /** Bell weight used (0 while a movement is still at a bodyweight stage) */
+  weight?: number
+  unit?: WeightUnit
 }
 
 export interface WorkoutLogEntry {

@@ -20,7 +20,12 @@ joint-armor work. All data stays in your browser's localStorage — no accounts,
   complexity for the Wildman lifts; reps and elevation→depth→load for the ATG armor);
   miss and it holds. The TGU and ATG Split Squat advance after two consecutive hits
   (≈ one week at two sessions per week).
-- **History** — every saved workout is logged with the exact target attempted.
+- **History** — every saved workout is logged with the exact target attempted and the bell
+  weight used.
+- **Progress chart** — total output (reps × bell weight) per workout and as a cumulative
+  running total, filterable by movement, with a table view. Set your bell's weight (kg or
+  lb) in Settings; it's recorded with each save, so the chart keeps making sense when you
+  move to a heavier bell.
 - **Settings** — set your starting rep counts or correct a target manually; reset everything.
 
 ## Stack

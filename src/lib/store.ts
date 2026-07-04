@@ -1,10 +1,18 @@
 import { Store } from '@tanstack/store'
 import { DEFAULT_PROGRESSION } from './progression'
-import type { MovementId, ProgressionState, WorkoutLogEntry } from './types'
-import { applyResults, movementTarget } from './progression'
+import type { BellState, MovementId, ProgressionState, WorkoutLogEntry } from './types'
+import {
+  applyResults,
+  movementReps,
+  movementTarget,
+  movementUsesBell,
+} from './progression'
 
 const PROGRESSION_KEY = 'workout-tracker:progression:v1'
 const HISTORY_KEY = 'workout-tracker:history:v1'
+const BELL_KEY = 'workout-tracker:bell:v1'
+
+export const DEFAULT_BELL: BellState = { weight: 16, unit: 'kg' }
 
 function load<T>(key: string, fallback: T): T {
   if (typeof window === 'undefined') return fallback
@@ -33,6 +41,8 @@ export const progressionStore = new Store<ProgressionState>(
 
 export const historyStore = new Store<Array<WorkoutLogEntry>>(loadHistory())
 
+export const bellStore = new Store<BellState>(load(BELL_KEY, DEFAULT_BELL))
+
 if (typeof window !== 'undefined') {
   progressionStore.subscribe(() => {
     window.localStorage.setItem(PROGRESSION_KEY, JSON.stringify(progressionStore.state))
@@ -40,6 +50,13 @@ if (typeof window !== 'undefined') {
   historyStore.subscribe(() => {
     window.localStorage.setItem(HISTORY_KEY, JSON.stringify(historyStore.state))
   })
+  bellStore.subscribe(() => {
+    window.localStorage.setItem(BELL_KEY, JSON.stringify(bellStore.state))
+  })
+}
+
+export function setBell(next: BellState): void {
+  bellStore.setState(() => next)
 }
 
 export function saveWorkout(
@@ -56,6 +73,9 @@ export function saveWorkout(
         movement,
         target: movementTarget(progression, movement),
         hit,
+        reps: movementReps(progression, movement),
+        weight: movementUsesBell(progression, movement) ? bellStore.state.weight : 0,
+        unit: bellStore.state.unit,
       }),
     ),
   }

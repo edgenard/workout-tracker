@@ -1,8 +1,9 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { LIMITS, SPLIT_SQUAT_LEVELS, movementTarget } from '#/lib/progression'
-import { progressionStore, resetAllData, setProgression } from '#/lib/store'
-import type { MovementId } from '#/lib/types'
+import { bellStore, progressionStore, resetAllData, setBell, setProgression } from '#/lib/store'
+import { convertWeight } from '#/lib/volume'
+import type { MovementId, WeightUnit } from '#/lib/types'
 
 export const Route = createFileRoute('/settings')({ component: Settings, ssr: false })
 
@@ -17,6 +18,7 @@ const selectInput =
 
 function Settings() {
   const p = useStore(progressionStore)
+  const bell = useStore(bellStore)
 
   return (
     <div className="space-y-6">
@@ -28,6 +30,44 @@ function Settings() {
           mistake. All data lives in this browser’s local storage.
         </p>
       </div>
+
+      <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
+        <p className="font-bold text-emerald-400">Your Kettlebell</p>
+        <p className="mb-3 text-sm text-zinc-500">
+          Recorded with every workout you save — the Progress chart multiplies it by total reps.
+          Update it here when you move to a heavier bell.
+        </p>
+        <div className="flex flex-wrap items-center gap-4">
+          <label className="flex items-center gap-2 text-sm">
+            Weight
+            <input
+              type="number"
+              min={1}
+              max={100}
+              step={bell.unit === 'kg' ? 2 : 5}
+              className={numberInput}
+              value={bell.weight}
+              onChange={(e) =>
+                setBell({ ...bell, weight: clamp(e.target.valueAsNumber || 1, 1, 100) })
+              }
+            />
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            Unit
+            <select
+              className={selectInput}
+              value={bell.unit}
+              onChange={(e) => {
+                const unit = e.target.value as WeightUnit
+                setBell({ weight: Math.round(convertWeight(bell.weight, bell.unit, unit)), unit })
+              }}
+            >
+              <option value="kg">kg</option>
+              <option value="lb">lb</option>
+            </select>
+          </label>
+        </div>
+      </section>
 
       <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
         <p className="font-bold text-emerald-400">Swing</p>

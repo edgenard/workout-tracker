@@ -2,12 +2,14 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { DAY_INFO } from '#/lib/plan'
 import { MOVEMENT_NAMES } from '#/lib/progression'
-import { deleteWorkout, historyStore } from '#/lib/store'
+import { bellStore, deleteWorkout, historyStore } from '#/lib/store'
+import { entryVolume, formatVolume } from '#/lib/volume'
 
 export const Route = createFileRoute('/history')({ component: History, ssr: false })
 
 function History() {
   const history = useStore(historyStore)
+  const bell = useStore(bellStore)
 
   return (
     <div className="space-y-4">
@@ -47,16 +49,36 @@ function History() {
           {entry.results.length === 0 ? (
             <p className="mt-2 text-sm text-zinc-400">Warm-up and cool-down only.</p>
           ) : (
-            <ul className="mt-2 space-y-1">
-              {entry.results.map((r) => (
-                <li key={r.movement} className="text-sm text-zinc-300">
-                  <span className={r.hit ? 'text-emerald-400' : 'text-rose-400'}>
-                    {r.hit ? '✓' : '✗'}
-                  </span>{' '}
-                  <span className="font-semibold">{MOVEMENT_NAMES[r.movement]}:</span> {r.target}
-                </li>
-              ))}
-            </ul>
+            <>
+              <ul className="mt-2 space-y-1">
+                {entry.results.map((r) => (
+                  <li key={r.movement} className="text-sm text-zinc-300">
+                    <span className={r.hit ? 'text-emerald-400' : 'text-rose-400'}>
+                      {r.hit ? '✓' : '✗'}
+                    </span>{' '}
+                    <span className="font-semibold">{MOVEMENT_NAMES[r.movement]}:</span> {r.target}
+                    {r.weight !== undefined && (
+                      <span className="text-zinc-500">
+                        {' '}
+                        @ {r.weight > 0 ? `${r.weight} ${r.unit}` : 'bodyweight'}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              {(() => {
+                const v = entryVolume(entry, bell.unit)
+                return v !== null ? (
+                  <p className="mt-2 text-sm text-zinc-500">
+                    Total output:{' '}
+                    <span className="font-semibold text-zinc-300 tabular-nums">
+                      {formatVolume(v)}
+                    </span>{' '}
+                    {bell.unit}·reps
+                  </p>
+                ) : null
+              })()}
+            </>
           )}
         </div>
       ))}

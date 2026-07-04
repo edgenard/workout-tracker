@@ -10,7 +10,11 @@ import {
   advanceTgu,
   applyResults,
   ladderRungs,
+  movementReps,
+  movementUsesBell,
 } from './progression'
+import { convertWeight, entryVolume } from './volume'
+import type { WorkoutLogEntry } from './types'
 
 describe('swing progression', () => {
   it('adds a minute per successful workout up to 20', () => {
@@ -147,6 +151,72 @@ describe('atg split squat progression (depth over weeks, then load)', () => {
       level: top,
       successStreak: 0,
     })
+  })
+})
+
+describe('movement reps and bell usage (for volume tracking)', () => {
+  it('computes total reps per movement from the current target', () => {
+    expect(movementReps(DEFAULT_PROGRESSION, 'swing')).toBe(100) // 10 × 10
+    expect(movementReps(DEFAULT_PROGRESSION, 'tgu')).toBe(10) // 1/min × 10
+    expect(movementReps(DEFAULT_PROGRESSION, 'pullover')).toBe(30) // 3 × 10
+    expect(movementReps(DEFAULT_PROGRESSION, 'cleanPress')).toBe(36) // (3+2+1) × 3 × 2 arms
+    expect(movementReps(DEFAULT_PROGRESSION, 'squat')).toBe(60) // 6 × 10
+    expect(movementReps(DEFAULT_PROGRESSION, 'splitSquat')).toBe(50) // 5 × 5 × 2 legs
+  })
+
+  it('split squat only uses the bell at the loaded stage', () => {
+    expect(movementUsesBell(DEFAULT_PROGRESSION, 'splitSquat')).toBe(false)
+    const loaded = {
+      ...DEFAULT_PROGRESSION,
+      splitSquat: { level: 4, successStreak: 0 },
+    }
+    expect(movementUsesBell(loaded, 'splitSquat')).toBe(true)
+    expect(movementUsesBell(DEFAULT_PROGRESSION, 'swing')).toBe(true)
+  })
+})
+
+describe('volume', () => {
+  it('converts between kg and lb', () => {
+    expect(convertWeight(16, 'kg', 'lb')).toBeCloseTo(35.27, 1)
+    expect(convertWeight(35, 'lb', 'kg')).toBeCloseTo(15.88, 1)
+    expect(convertWeight(16, 'kg', 'kg')).toBe(16)
+  })
+
+  it('sums reps × weight across a workout in the display unit', () => {
+    const entry: WorkoutLogEntry = {
+      id: 'x',
+      date: '2026-07-06T10:00:00Z',
+      day: 'a',
+      results: [
+        { movement: 'swing', target: '', hit: true, reps: 100, weight: 16, unit: 'kg' },
+        { movement: 'tgu', target: '', hit: true, reps: 10, weight: 16, unit: 'kg' },
+        { movement: 'pullover', target: '', hit: false, reps: 30, weight: 16, unit: 'kg' },
+      ],
+    }
+    expect(entryVolume(entry, 'kg')).toBe(140 * 16)
+  })
+
+  it('returns null for legacy entries without weight data', () => {
+    const entry: WorkoutLogEntry = {
+      id: 'x',
+      date: '2026-07-06T10:00:00Z',
+      day: 'a',
+      results: [{ movement: 'swing', target: '', hit: true }],
+    }
+    expect(entryVolume(entry, 'kg')).toBeNull()
+  })
+
+  it('counts bodyweight-stage movements as zero, not missing', () => {
+    const entry: WorkoutLogEntry = {
+      id: 'x',
+      date: '2026-07-06T10:00:00Z',
+      day: 'b',
+      results: [
+        { movement: 'squat', target: '', hit: true, reps: 60, weight: 16, unit: 'kg' },
+        { movement: 'splitSquat', target: '', hit: true, reps: 50, weight: 0, unit: 'kg' },
+      ],
+    }
+    expect(entryVolume(entry, 'kg')).toBe(960)
   })
 })
 
