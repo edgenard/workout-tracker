@@ -35,6 +35,12 @@ export function minuteBeep(): void {
   tone(1200, 160, 220)
 }
 
+/** Mid-segment switch (change sides / next set) — low-high two-tone, distinct from the minute beep */
+export function switchBeep(): void {
+  tone(650, 300)
+  tone(975, 300, 350)
+}
+
 /** Timer finished */
 export function finishBeep(): void {
   tone(1000, 180)

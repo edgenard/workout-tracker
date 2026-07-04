@@ -82,4 +82,8 @@ export interface TimerSegment {
   name: string
   cue: string
   seconds: number
+  /** Seconds into the segment where a switch cue fires (e.g. change sides) */
+  switchTimes?: Array<number>
+  /** What a switch divides the segment into, e.g. "Side" or "Set" */
+  switchLabel?: string
 }

@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react'
-import { finishBeep, minuteBeep, unlockAudio } from '#/lib/audio'
+import { useEffect, useMemo, useRef } from 'react'
+import { finishBeep, minuteBeep, switchBeep, tick, unlockAudio } from '#/lib/audio'
 import { formatClock, useStopwatch, useWakeLock } from '#/lib/useStopwatch'
 import type { TimerSegment } from '#/lib/types'
 
@@ -32,7 +32,25 @@ export function SegmentTimer({ title, segments, onDone }: SegmentTimerProps) {
   const segRemaining = segStart + current.seconds - elapsedSec
   const next = segments[currentIdx + 1]
 
+  // Absolute times (from timer start) of every mid-segment switch cue
+  const switchPoints = useMemo(() => {
+    const points: Array<number> = []
+    let start = 0
+    for (const seg of segments) {
+      for (const t of seg.switchTimes ?? []) points.push(start + t)
+      start += seg.seconds
+    }
+    return points
+  }, [segments])
+
+  // Which part of the current segment we're in (e.g. Side 1 of 2)
+  const secIntoSeg = elapsedSec - segStart
+  const segSwitches = current.switchTimes ?? []
+  const currentPart = segSwitches.filter((t) => secIntoSeg >= t).length + 1
+
   const lastIdxRef = useRef(0)
+  const firedSwitchesRef = useRef(new Set<number>())
+  const lastTickKeyRef = useRef('')
   const doneRef = useRef(false)
 
   useEffect(() => {
@@ -50,7 +68,35 @@ export function SegmentTimer({ title, segments, onDone }: SegmentTimerProps) {
       lastIdxRef.current = currentIdx
       minuteBeep()
     }
-  }, [elapsedMs, status, currentIdx, totalSeconds, finish, onDone])
+    const nowSec = elapsedMs / 1000
+    for (const point of switchPoints) {
+      if (nowSec >= point && !firedSwitchesRef.current.has(point)) {
+        firedSwitchesRef.current.add(point)
+        switchBeep()
+      }
+    }
+    // 3-2-1 tick into the next boundary (switch cue or segment change)
+    const boundaries = [...switchPoints, segStart + current.seconds]
+    const nextBoundary = Math.min(...boundaries.filter((b) => b > nowSec), totalSeconds)
+    const remaining = Math.ceil(nextBoundary - nowSec)
+    if (remaining <= 3 && remaining >= 1) {
+      const key = `${nextBoundary}:${remaining}`
+      if (key !== lastTickKeyRef.current) {
+        lastTickKeyRef.current = key
+        tick()
+      }
+    }
+  }, [
+    elapsedMs,
+    status,
+    currentIdx,
+    totalSeconds,
+    switchPoints,
+    segStart,
+    current.seconds,
+    finish,
+    onDone,
+  ])
 
   const endEarly = () => {
     if (doneRef.current) return
@@ -91,6 +137,12 @@ export function SegmentTimer({ title, segments, onDone }: SegmentTimerProps) {
         {currentIdx + 1} of {segments.length}
       </p>
       <p className="text-3xl font-bold text-emerald-400">{current.name}</p>
+      {segSwitches.length > 0 && status !== 'done' && (
+        <p className="text-lg font-bold text-amber-400">
+          {current.switchLabel ?? 'Part'} {currentPart} of {segSwitches.length + 1} — switch at
+          the beep
+        </p>
+      )}
       <p className={`text-7xl font-black tabular-nums ${status === 'done' ? 'text-emerald-400' : ''}`}>
         {status === 'done' ? 'Done' : formatClock(segRemaining)}
       </p>

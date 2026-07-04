@@ -37,14 +37,18 @@ export function cooldownSegments(goodMorningLoaded: boolean): Array<TimerSegment
     },
     {
       name: '90/90 Hip Stretch',
-      cue: 'Both legs at 90°. Lean over the front shin, then rotate to the back. Switch sides halfway.',
+      cue: 'Both legs at 90°. Lean over the front shin, then rotate to the back. Switch sides at the beep.',
       seconds: 120,
+      switchTimes: [60],
+      switchLabel: 'Side',
     },
     goodMorningLoaded
       ? {
           name: 'Seated Good Mornings (ATG)',
-          cue: 'Hug the bell to your chest. Lower back arched, hinge slowly between your legs — 3 sets of 10 controlled reps.',
+          cue: 'Hug the bell to your chest. Lower back arched, hinge slowly between your legs — 3 sets of 10 controlled reps, next set at the beep.',
           seconds: 180,
+          switchTimes: [60, 120],
+          switchLabel: 'Set',
         }
       : {
           name: 'Seated Good Mornings (ATG)',
