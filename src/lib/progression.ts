@@ -2,6 +2,8 @@ import type {
   CleanPressState,
   MovementId,
   ProgressionState,
+  PulloverState,
+  SplitSquatState,
   SquatState,
   SwingState,
   TguState,
@@ -16,20 +18,39 @@ export const LIMITS = {
   squatMaxReps: 12,
   maxLadders: 5,
   maxLadderTop: 5,
+  pulloverSets: 3,
+  pulloverMinReps: 10,
+  pulloverMaxReps: 15,
+  splitSquatSets: 5,
+  splitSquatReps: 5,
 }
+
+/** ATG split squat depth-then-load progression, shallowest to hardest */
+export const SPLIT_SQUAT_LEVELS = [
+  'front foot on a chair, bodyweight',
+  'front foot on a low box, bodyweight',
+  'front foot on a plate/step, bodyweight',
+  'front foot flat on the floor, bodyweight',
+  'floor, kettlebell in goblet position',
+]
 
 export const DEFAULT_PROGRESSION: ProgressionState = {
   swing: { style: 'two-hand', repsPerMinute: 10, minutes: 10 },
   tgu: { minutes: 10, pauses: false, successStreak: 0 },
+  pullover: { reps: 10 },
   cleanPress: { ladderTop: 3, ladders: 3 },
   squat: { style: 'goblet', repsPerMinute: 6, minutes: 10 },
+  splitSquat: { level: 0, successStreak: 0 },
+  goodMorning: { loaded: false },
 }
 
 export const MOVEMENT_NAMES: Record<MovementId, string> = {
   swing: 'Kettlebell Swing',
   tgu: 'Turkish Get-Up',
+  pullover: 'Floor Pullovers',
   cleanPress: 'Clean & Press',
   squat: 'Squat',
+  splitSquat: 'ATG Split Squat',
 }
 
 function ladderReps(top: number): number {
@@ -55,6 +76,16 @@ export function cleanPressTarget(c: CleanPressState): string {
   } reps per arm)`
 }
 
+export function pulloverTarget(p: PulloverState): string {
+  return `Floor Pullovers — ${LIMITS.pulloverSets} sets × ${p.reps} reps`
+}
+
+export function splitSquatTarget(s: SplitSquatState): string {
+  return `ATG Split Squats — ${LIMITS.splitSquatSets} sets × ${LIMITS.splitSquatReps} per leg, ${
+    SPLIT_SQUAT_LEVELS[s.level]
+  }`
+}
+
 export function squatTarget(s: SquatState): string {
   const style = s.style === 'goblet' ? 'Goblet' : 'Single-Arm Front Rack'
   return `${style} Squats — ${s.repsPerMinute} reps EMOM × ${s.minutes} min (${
@@ -68,10 +99,14 @@ export function movementTarget(p: ProgressionState, m: MovementId): string {
       return swingTarget(p.swing)
     case 'tgu':
       return tguTarget(p.tgu)
+    case 'pullover':
+      return pulloverTarget(p.pullover)
     case 'cleanPress':
       return cleanPressTarget(p.cleanPress)
     case 'squat':
       return squatTarget(p.squat)
+    case 'splitSquat':
+      return splitSquatTarget(p.splitSquat)
   }
 }
 
@@ -93,6 +128,24 @@ export function nextStepHint(p: ProgressionState, m: MovementId): string {
       if (t.minutes < LIMITS.emomMaxMinutes) return `Next: add 2 minutes (${t.minutes + 2} min)${wait}`
       if (!t.pauses) return `Next: add 3-second pauses at every transition${wait}`
       return 'Cycle complete — time for a heavier bell'
+    }
+    case 'pullover': {
+      const r = p.pullover.reps
+      if (r < LIMITS.pulloverMaxReps) return `Next: add 1 rep per set (3 × ${r + 1})`
+      return 'At 3 × 15 — deepen the stretch and slow the tempo'
+    }
+    case 'splitSquat': {
+      const s = p.splitSquat
+      if (s.level >= SPLIT_SQUAT_LEVELS.length - 1)
+        return 'Full depth, loaded — armor complete, keep it strong'
+      const need = 2 - s.successStreak
+      const wait = need > 1 ? ` (after ${need} more hits — lower the elevation over weeks)` : ''
+      const next = SPLIT_SQUAT_LEVELS[s.level + 1]
+      const gate =
+        s.level === SPLIT_SQUAT_LEVELS.length - 2
+          ? ' Only load once the full range is pain-free.'
+          : ''
+      return `Next: ${next}${wait}.${gate}`
     }
     case 'cleanPress': {
       const c = p.cleanPress
@@ -134,6 +187,20 @@ export function advanceTgu(t: TguState, hit: boolean): TguState {
   return { ...t, successStreak: 0 }
 }
 
+export function advancePullover(p: PulloverState, hit: boolean): PulloverState {
+  if (!hit) return p
+  if (p.reps < LIMITS.pulloverMaxReps) return { reps: p.reps + 1 }
+  return p
+}
+
+export function advanceSplitSquat(s: SplitSquatState, hit: boolean): SplitSquatState {
+  if (!hit) return { ...s, successStreak: 0 }
+  const streak = s.successStreak + 1
+  if (streak < 2) return { ...s, successStreak: streak }
+  if (s.level < SPLIT_SQUAT_LEVELS.length - 1) return { level: s.level + 1, successStreak: 0 }
+  return { ...s, successStreak: 0 }
+}
+
 export function advanceCleanPress(c: CleanPressState, hit: boolean): CleanPressState {
   if (!hit) return c
   if (c.ladders < LIMITS.maxLadders) return { ...c, ladders: c.ladders + 1 }
@@ -158,9 +225,13 @@ export function applyResults(
   const next = { ...p }
   if (results.swing !== undefined) next.swing = advanceSwing(p.swing, results.swing)
   if (results.tgu !== undefined) next.tgu = advanceTgu(p.tgu, results.tgu)
+  if (results.pullover !== undefined)
+    next.pullover = advancePullover(p.pullover, results.pullover)
   if (results.cleanPress !== undefined)
     next.cleanPress = advanceCleanPress(p.cleanPress, results.cleanPress)
   if (results.squat !== undefined) next.squat = advanceSquat(p.squat, results.squat)
+  if (results.splitSquat !== undefined)
+    next.splitSquat = advanceSplitSquat(p.splitSquat, results.splitSquat)
   return next
 }
 

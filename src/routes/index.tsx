@@ -58,7 +58,9 @@ function Home() {
       <section>
         <h2 className="mb-3 text-xl font-bold">Current Targets</h2>
         <div className="grid gap-3 sm:grid-cols-2">
-          {(['swing', 'tgu', 'cleanPress', 'squat'] as Array<MovementId>).map((m) => (
+          {(
+            ['swing', 'tgu', 'pullover', 'cleanPress', 'squat', 'splitSquat'] as Array<MovementId>
+          ).map((m) => (
             <div key={m} className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
               <p className="text-sm font-semibold uppercase tracking-widest text-emerald-400">
                 {MOVEMENT_NAMES[m]}

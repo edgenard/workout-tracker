@@ -1,4 +1,10 @@
-export type MovementId = 'swing' | 'tgu' | 'cleanPress' | 'squat'
+export type MovementId =
+  | 'swing'
+  | 'tgu'
+  | 'pullover'
+  | 'cleanPress'
+  | 'squat'
+  | 'splitSquat'
 
 export type DayId = 'a' | 'b' | 'recovery'
 
@@ -30,11 +36,31 @@ export interface SquatState {
   minutes: number
 }
 
+export interface PulloverState {
+  /** ATG shoulder armor: 3 sets, build from 10 to 15 controlled reps */
+  reps: number
+}
+
+export interface SplitSquatState {
+  /** ATG knee armor: 0 = high elevation … 3 = floor bodyweight, 4 = floor goblet-loaded */
+  level: number
+  /** Depth drops "over weeks" — require 2 consecutive hits to lower the elevation */
+  successStreak: number
+}
+
+export interface GoodMorningState {
+  /** ROM first with bodyweight; hug the bell only once deep hinging is comfortable */
+  loaded: boolean
+}
+
 export interface ProgressionState {
   swing: SwingState
   tgu: TguState
+  pullover: PulloverState
   cleanPress: CleanPressState
   squat: SquatState
+  splitSquat: SplitSquatState
+  goodMorning: GoodMorningState
 }
 
 export interface MovementResult {

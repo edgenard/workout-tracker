@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_PROGRESSION,
+  SPLIT_SQUAT_LEVELS,
   advanceCleanPress,
+  advancePullover,
+  advanceSplitSquat,
   advanceSquat,
   advanceSwing,
   advanceTgu,
@@ -105,6 +108,48 @@ describe('squat progression', () => {
   })
 })
 
+describe('floor pullover progression (ATG shoulder armor)', () => {
+  it('adds a rep per successful workout up to 15', () => {
+    expect(advancePullover({ reps: 10 }, true)).toEqual({ reps: 11 })
+  })
+
+  it('holds at 15 and on misses', () => {
+    expect(advancePullover({ reps: 15 }, true)).toEqual({ reps: 15 })
+    expect(advancePullover({ reps: 12 }, false)).toEqual({ reps: 12 })
+  })
+})
+
+describe('atg split squat progression (depth over weeks, then load)', () => {
+  it('first hit only builds the streak', () => {
+    expect(advanceSplitSquat({ level: 0, successStreak: 0 }, true)).toEqual({
+      level: 0,
+      successStreak: 1,
+    })
+  })
+
+  it('two consecutive hits lower the elevation one stage', () => {
+    expect(advanceSplitSquat({ level: 0, successStreak: 1 }, true)).toEqual({
+      level: 1,
+      successStreak: 0,
+    })
+  })
+
+  it('a miss resets the streak without losing the stage', () => {
+    expect(advanceSplitSquat({ level: 2, successStreak: 1 }, false)).toEqual({
+      level: 2,
+      successStreak: 0,
+    })
+  })
+
+  it('caps at the loaded floor stage', () => {
+    const top = SPLIT_SQUAT_LEVELS.length - 1
+    expect(advanceSplitSquat({ level: top, successStreak: 1 }, true)).toEqual({
+      level: top,
+      successStreak: 0,
+    })
+  })
+})
+
 describe('applyResults', () => {
   it('only advances movements that were logged', () => {
     const next = applyResults(DEFAULT_PROGRESSION, { swing: true })
@@ -117,5 +162,11 @@ describe('applyResults', () => {
     const next = applyResults(DEFAULT_PROGRESSION, { cleanPress: true, squat: false })
     expect(next.cleanPress.ladders).toBe(4)
     expect(next.squat).toEqual(DEFAULT_PROGRESSION.squat)
+  })
+
+  it('handles the ATG movements', () => {
+    const next = applyResults(DEFAULT_PROGRESSION, { pullover: true, splitSquat: true })
+    expect(next.pullover.reps).toBe(11)
+    expect(next.splitSquat).toEqual({ level: 0, successStreak: 1 })
   })
 })

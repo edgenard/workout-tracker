@@ -4,9 +4,11 @@ import { useStore } from '@tanstack/react-store'
 import { EmomTimer } from '#/components/EmomTimer'
 import { LadderTracker } from '#/components/LadderTracker'
 import { SegmentTimer } from '#/components/SegmentTimer'
+import { SetTracker } from '#/components/SetTracker'
 import { GoalCheck } from '#/components/GoalCheck'
-import { COOLDOWN_SEGMENTS, DAY_INFO, WARMUP_SEGMENTS } from '#/lib/plan'
+import { DAY_INFO, WARMUP_SEGMENTS, cooldownSegments } from '#/lib/plan'
 import {
+  LIMITS,
   MOVEMENT_NAMES,
   ladderRungs,
   movementTarget,
@@ -28,7 +30,11 @@ type Step =
 
 function stepsForDay(day: DayId): Array<Step> {
   const movements: Array<MovementId> =
-    day === 'a' ? ['swing', 'tgu'] : day === 'b' ? ['cleanPress', 'squat'] : []
+    day === 'a'
+      ? ['swing', 'tgu', 'pullover']
+      : day === 'b'
+        ? ['cleanPress', 'squat', 'splitSquat']
+        : []
   return [
     { kind: 'warmup' },
     ...movements.map((movement) => ({ kind: 'movement' as const, movement })),
@@ -109,7 +115,11 @@ function Session({ day }: { day: DayId }) {
           <SegmentTimer title="Warm-up" segments={WARMUP_SEGMENTS} onDone={markTimerDone} />
         )}
         {step.kind === 'cooldown' && (
-          <SegmentTimer title="Cool-down" segments={COOLDOWN_SEGMENTS} onDone={markTimerDone} />
+          <SegmentTimer
+            title="Cool-down"
+            segments={cooldownSegments(progression.goodMorning.loaded)}
+            onDone={markTimerDone}
+          />
         )}
         {step.kind === 'movement' && (
           <MovementStep
@@ -228,8 +238,22 @@ function MovementStep({
           onDone={onTimerDone}
         />
       )}
+      {movement === 'pullover' && (
+        <SetTracker
+          sets={LIMITS.pulloverSets}
+          repsText={`${progression.pullover.reps} pullovers`}
+          onDone={onTimerDone}
+        />
+      )}
       {movement === 'cleanPress' && (
         <LadderTracker rungs={ladderRungs(progression.cleanPress)} onDone={onTimerDone} />
+      )}
+      {movement === 'splitSquat' && (
+        <SetTracker
+          sets={LIMITS.splitSquatSets}
+          repsText={`${LIMITS.splitSquatReps} per leg`}
+          onDone={onTimerDone}
+        />
       )}
       {movement === 'squat' && (
         <EmomTimer

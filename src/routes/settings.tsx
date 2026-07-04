@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { LIMITS, movementTarget } from '#/lib/progression'
+import { LIMITS, SPLIT_SQUAT_LEVELS, movementTarget } from '#/lib/progression'
 import { progressionStore, resetAllData, setProgression } from '#/lib/store'
 import type { MovementId } from '#/lib/types'
 
@@ -239,6 +239,81 @@ function Settings() {
             />
           </label>
         </div>
+      </section>
+
+      <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
+        <p className="font-bold text-emerald-400">Floor Pullovers</p>
+        <p className="mb-3 text-sm text-zinc-500">{movementTarget(p, 'pullover' as MovementId)}</p>
+        <label className="flex items-center gap-2 text-sm">
+          Reps per set
+          <input
+            type="number"
+            min={LIMITS.pulloverMinReps}
+            max={LIMITS.pulloverMaxReps}
+            className={numberInput}
+            value={p.pullover.reps}
+            onChange={(e) =>
+              setProgression({
+                ...p,
+                pullover: {
+                  reps: clamp(
+                    e.target.valueAsNumber || LIMITS.pulloverMinReps,
+                    LIMITS.pulloverMinReps,
+                    LIMITS.pulloverMaxReps,
+                  ),
+                },
+              })
+            }
+          />
+        </label>
+      </section>
+
+      <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
+        <p className="font-bold text-emerald-400">ATG Split Squat</p>
+        <p className="mb-3 text-sm text-zinc-500">
+          {movementTarget(p, 'splitSquat' as MovementId)}
+        </p>
+        <label className="flex flex-wrap items-center gap-2 text-sm">
+          Stage
+          <select
+            className={selectInput}
+            value={p.splitSquat.level}
+            onChange={(e) =>
+              setProgression({
+                ...p,
+                splitSquat: { level: Number(e.target.value), successStreak: 0 },
+              })
+            }
+          >
+            {SPLIT_SQUAT_LEVELS.map((label, i) => (
+              <option key={label} value={i}>
+                {i + 1}. {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <p className="mt-2 text-sm text-zinc-500">
+          Only move to the loaded stage once the full floor range is pain-free.
+        </p>
+      </section>
+
+      <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
+        <p className="font-bold text-emerald-400">Seated Good Mornings (cool-down)</p>
+        <label className="mt-1 flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="size-4 accent-emerald-500"
+            checked={p.goodMorning.loaded}
+            onChange={(e) =>
+              setProgression({ ...p, goodMorning: { loaded: e.target.checked } })
+            }
+          />
+          Loaded: hug the bell to the chest, 3 × 10 slow reps
+        </label>
+        <p className="mt-2 text-sm text-zinc-500">
+          Stay bodyweight until you can hinge deeply between your legs without rounding the
+          lower back.
+        </p>
       </section>
 
       <section className="rounded-2xl border border-rose-900/50 bg-rose-950/20 p-4">
