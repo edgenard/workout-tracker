@@ -71,6 +71,10 @@ export interface BellState {
   unit: WeightUnit
 }
 
+export interface WorkoutSettingsState {
+  transitionSeconds: number
+}
+
 export interface MovementResult {
   movement: MovementId
   /** Human-readable target that was attempted, frozen at log time */

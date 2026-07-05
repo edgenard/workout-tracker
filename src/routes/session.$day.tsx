@@ -14,7 +14,7 @@ import {
   movementTarget,
   nextStepHint,
 } from '#/lib/progression'
-import { progressionStore, saveWorkout } from '#/lib/store'
+import { progressionStore, saveWorkout, settingsStore } from '#/lib/store'
 import type { DayId, MovementId, ProgressionState } from '#/lib/types'
 
 export const Route = createFileRoute('/session/$day')({
@@ -74,6 +74,7 @@ function SessionPage() {
 function Session({ day }: { day: DayId }) {
   const navigate = useNavigate()
   const progression = useStore(progressionStore)
+  const settings = useStore(settingsStore)
   const steps = stepsForDay(day)
   const [stepIdx, setStepIdx] = useState(0)
   const [results, setResults] = useState<Partial<Record<MovementId, boolean>>>({})
@@ -112,12 +113,18 @@ function Session({ day }: { day: DayId }) {
 
       <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
         {step.kind === 'warmup' && (
-          <SegmentTimer title="Warm-up" segments={WARMUP_SEGMENTS} onDone={markTimerDone} />
+          <SegmentTimer
+            title="Warm-up"
+            segments={WARMUP_SEGMENTS}
+            transitionSeconds={settings.transitionSeconds}
+            onDone={markTimerDone}
+          />
         )}
         {step.kind === 'cooldown' && (
           <SegmentTimer
             title="Cool-down"
             segments={cooldownSegments(progression.goodMorning.loaded)}
+            transitionSeconds={settings.transitionSeconds}
             onDone={markTimerDone}
           />
         )}

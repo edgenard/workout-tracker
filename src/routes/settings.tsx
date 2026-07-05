@@ -1,7 +1,15 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { LIMITS, SPLIT_SQUAT_LEVELS, movementTarget } from '#/lib/progression'
-import { bellStore, progressionStore, resetAllData, setBell, setProgression } from '#/lib/store'
+import {
+  bellStore,
+  progressionStore,
+  resetAllData,
+  setBell,
+  setProgression,
+  setWorkoutSettings,
+  settingsStore,
+} from '#/lib/store'
 import { convertWeight } from '#/lib/volume'
 import type { MovementId, WeightUnit } from '#/lib/types'
 
@@ -19,6 +27,7 @@ const selectInput =
 function Settings() {
   const p = useStore(progressionStore)
   const bell = useStore(bellStore)
+  const settings = useStore(settingsStore)
 
   return (
     <div className="space-y-6">
@@ -30,6 +39,29 @@ function Settings() {
           mistake. All data lives in this browser’s local storage.
         </p>
       </div>
+
+      <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
+        <p className="font-bold text-emerald-400">Warm-up & Cool-down</p>
+        <p className="mb-3 text-sm text-zinc-500">
+          Setup countdown between individual warm-up and cool-down exercises.
+        </p>
+        <label className="flex items-center gap-2 text-sm">
+          Transition seconds
+          <input
+            type="number"
+            min={0}
+            max={60}
+            className={numberInput}
+            value={settings.transitionSeconds}
+            onChange={(e) =>
+              setWorkoutSettings({
+                ...settings,
+                transitionSeconds: clamp(e.target.valueAsNumber || 0, 0, 60),
+              })
+            }
+          />
+        </label>
+      </section>
 
       <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
         <p className="font-bold text-emerald-400">Your Kettlebell</p>
