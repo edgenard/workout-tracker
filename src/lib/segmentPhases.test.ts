@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { buildSegmentPhases, phaseAtElapsedSeconds } from './segmentPhases'
+import {
+  buildSegmentPhases,
+  buildSegmentSwitchPoints,
+  phaseAtElapsedSeconds,
+} from './segmentPhases'
 import type { TimerSegment } from './types'
 
 const segments: Array<TimerSegment> = [
@@ -47,5 +51,18 @@ describe('phaseAtElapsedSeconds', () => {
     const phases = buildSegmentPhases(segments, 5)
 
     expect(phaseAtElapsedSeconds(phases, 70)).toEqual(phases[4])
+  })
+})
+
+describe('buildSegmentSwitchPoints', () => {
+  it('keeps switch cues relative to work phase starts when transitions are inserted', () => {
+    const switchingSegments: Array<TimerSegment> = [
+      { name: 'First', cue: 'Start here', seconds: 10 },
+      { name: 'Second', cue: 'Switch once', seconds: 20, switchTimes: [8] },
+      { name: 'Third', cue: 'Switch twice', seconds: 30, switchTimes: [6, 18] },
+    ]
+    const phases = buildSegmentPhases(switchingSegments, 5)
+
+    expect(buildSegmentSwitchPoints(switchingSegments, phases)).toEqual([23, 46, 58])
   })
 })

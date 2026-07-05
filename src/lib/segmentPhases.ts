@@ -42,3 +42,20 @@ export function phaseAtElapsedSeconds(
   const found = phases.find((phase) => clampedElapsed < phase.startsAt + phase.seconds)
   return found ?? phases[phases.length - 1]!
 }
+
+export function buildSegmentSwitchPoints(
+  segments: Array<TimerSegment>,
+  phases: Array<SegmentPhase>,
+): Array<number> {
+  const points: Array<number> = []
+
+  for (const phase of phases) {
+    if (phase.kind !== 'work') continue
+    const segment = segments[phase.segmentIndex]!
+    for (const switchTime of segment.switchTimes ?? []) {
+      points.push(phase.startsAt + switchTime)
+    }
+  }
+
+  return points
+}

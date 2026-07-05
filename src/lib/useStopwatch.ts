@@ -38,6 +38,16 @@ export function useStopwatch() {
     setStatus('running')
   }, [])
 
+  const seek = useCallback(
+    (elapsedMs: number) => {
+      const nextElapsedMs = Math.max(0, elapsedMs)
+      accumulatedRef.current = nextElapsedMs
+      startedAtRef.current = Date.now()
+      setElapsedMs(nextElapsedMs)
+    },
+    [],
+  )
+
   const finish = useCallback(() => {
     setStatus('done')
   }, [])
@@ -48,7 +58,7 @@ export function useStopwatch() {
     setStatus('idle')
   }, [])
 
-  return { status, elapsedMs, start, pause, resume, finish, reset }
+  return { status, elapsedMs, start, pause, resume, seek, finish, reset }
 }
 
 /** Keep the screen awake while a timer runs (best-effort, mobile browsers) */

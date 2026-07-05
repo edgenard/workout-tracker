@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { finishBeep, minuteBeep, switchBeep, tick, unlockAudio } from '#/lib/audio'
-import { buildSegmentPhases, phaseAtElapsedSeconds } from '#/lib/segmentPhases'
+import {
+  buildSegmentPhases,
+  buildSegmentSwitchPoints,
+  phaseAtElapsedSeconds,
+} from '#/lib/segmentPhases'
 import { formatClock, useStopwatch, useWakeLock } from '#/lib/useStopwatch'
 import type { TimerSegment } from '#/lib/types'
 
@@ -13,7 +17,7 @@ interface SegmentTimerProps {
 
 /** Guided interval timer for the warm-up / cool-down sequences */
 export function SegmentTimer({ title, segments, transitionSeconds = 5, onDone }: SegmentTimerProps) {
-  const { status, elapsedMs, start, pause, resume, finish } = useStopwatch()
+  const { status, elapsedMs, start, pause, resume, seek, finish } = useStopwatch()
   useWakeLock(status === 'running')
 
   const phases = useMemo(
@@ -31,13 +35,7 @@ export function SegmentTimer({ title, segments, transitionSeconds = 5, onDone }:
 
   // Absolute times (from timer start) of every mid-segment switch cue
   const switchPoints = useMemo(() => {
-    const points: Array<number> = []
-    for (const phase of phases) {
-      if (phase.kind !== 'work') continue
-      const seg = segments[phase.segmentIndex]!
-      for (const t of seg.switchTimes ?? []) points.push(phase.startsAt + t)
-    }
-    return points
+    return buildSegmentSwitchPoints(segments, phases)
   }, [phases, segments])
 
   // Which part of the current segment we're in (e.g. Side 1 of 2)
@@ -72,12 +70,18 @@ export function SegmentTimer({ title, segments, transitionSeconds = 5, onDone }:
         switchBeep()
       }
     }
-    // 3-2-1 tick into the next boundary (switch cue or segment change)
-    const boundaries = [...switchPoints, currentPhase.startsAt + currentPhase.seconds]
-    const nextBoundary = Math.min(...boundaries.filter((b) => b > nowSec), totalSeconds)
-    const remaining = Math.ceil(nextBoundary - nowSec)
+    const tickBoundary =
+      currentPhase.kind === 'transition'
+        ? currentPhase.startsAt + currentPhase.seconds
+        : Math.min(
+            ...switchPoints.filter(
+              (point) => point > nowSec && point < currentPhase.startsAt + currentPhase.seconds,
+            ),
+            Number.POSITIVE_INFINITY,
+          )
+    const remaining = Math.ceil(tickBoundary - nowSec)
     if (remaining <= 3 && remaining >= 1) {
-      const key = `${nextBoundary}:${remaining}`
+      const key = `${tickBoundary}:${remaining}`
       if (key !== lastTickKeyRef.current) {
         lastTickKeyRef.current = key
         tick()
@@ -99,6 +103,11 @@ export function SegmentTimer({ title, segments, transitionSeconds = 5, onDone }:
     doneRef.current = true
     finish()
     onDone()
+  }
+
+  const skipTransition = () => {
+    if (currentPhase.kind !== 'transition') return
+    seek(Math.min(currentPhase.startsAt + currentPhase.seconds, totalSeconds) * 1000)
   }
 
   if (status === 'idle') {
@@ -181,13 +190,23 @@ export function SegmentTimer({ title, segments, transitionSeconds = 5, onDone }:
               Resume
             </button>
           )}
-          <button
-            type="button"
-            className="rounded-lg border border-zinc-700 px-6 py-2 font-semibold text-zinc-400 hover:bg-zinc-800"
-            onClick={endEarly}
-          >
-            End early
-          </button>
+          {currentPhase.kind === 'transition' ? (
+            <button
+              type="button"
+              className="rounded-lg border border-zinc-700 px-6 py-2 font-semibold text-zinc-400 hover:bg-zinc-800"
+              onClick={skipTransition}
+            >
+              Skip
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="rounded-lg border border-zinc-700 px-6 py-2 font-semibold text-zinc-400 hover:bg-zinc-800"
+              onClick={endEarly}
+            >
+              End early
+            </button>
+          )}
         </div>
       )}
     </div>
