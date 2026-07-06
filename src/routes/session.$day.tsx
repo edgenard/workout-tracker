@@ -5,14 +5,19 @@ import { EmomTimer } from '#/components/EmomTimer'
 import { LadderTracker } from '#/components/LadderTracker'
 import { SegmentTimer } from '#/components/SegmentTimer'
 import { SetTracker } from '#/components/SetTracker'
-import { GoalCheck } from '#/components/GoalCheck'
+import { RepsCheck } from '#/components/RepsCheck'
 import { DAY_INFO, WARMUP_SEGMENTS, cooldownSegments } from '#/lib/plan'
 import {
   LIMITS,
   MOVEMENT_NAMES,
+  cleanPressRepsDone,
+  emomRepsDone,
   ladderRungs,
+  movementReps,
   movementTarget,
   nextStepHint,
+  pulloverRepsDone,
+  splitSquatRepsDone,
 } from '#/lib/progression'
 import { progressionStore, saveWorkout, settingsStore } from '#/lib/store'
 import type { DayId, MovementId, ProgressionState } from '#/lib/types'
@@ -77,7 +82,7 @@ function Session({ day }: { day: DayId }) {
   const settings = useStore(settingsStore)
   const steps = stepsForDay(day)
   const [stepIdx, setStepIdx] = useState(0)
-  const [results, setResults] = useState<Partial<Record<MovementId, boolean>>>({})
+  const [results, setResults] = useState<Partial<Record<MovementId, number>>>({})
   const [timerDone, setTimerDone] = useState<Record<number, boolean>>({})
   const [saved, setSaved] = useState(false)
 
@@ -117,6 +122,7 @@ function Session({ day }: { day: DayId }) {
             title="Warm-up"
             segments={WARMUP_SEGMENTS}
             transitionSeconds={settings.transitionSeconds}
+            countdownSeconds={settings.countdownSeconds}
             onDone={markTimerDone}
           />
         )}
@@ -125,6 +131,7 @@ function Session({ day }: { day: DayId }) {
             title="Cool-down"
             segments={cooldownSegments(progression.goodMorning.loaded)}
             transitionSeconds={settings.transitionSeconds}
+            countdownSeconds={settings.countdownSeconds}
             onDone={markTimerDone}
           />
         )}
@@ -134,8 +141,9 @@ function Session({ day }: { day: DayId }) {
             progression={progression}
             result={results[step.movement]}
             timerDone={!!timerDone[stepIdx]}
+            countdownSeconds={settings.countdownSeconds}
             onTimerDone={markTimerDone}
-            onResult={(hit) => setResults((r) => ({ ...r, [step.movement]: hit }))}
+            onResult={(repsDone) => setResults((r) => ({ ...r, [step.movement]: repsDone }))}
           />
         )}
         {step.kind === 'save' && (
@@ -143,14 +151,17 @@ function Session({ day }: { day: DayId }) {
             <p className="text-2xl font-black">
               {day === 'recovery' ? 'Recovery done' : 'Workout complete'}
             </p>
-            {(Object.entries(results) as Array<[MovementId, boolean]>).map(([m, hit]) => (
-              <p key={m} className="text-zinc-300">
-                <span className={hit ? 'text-emerald-400' : 'text-rose-400'}>
-                  {hit ? '✓' : '✗'}
-                </span>{' '}
-                {MOVEMENT_NAMES[m]}: {movementTarget(progression, m)}
-              </p>
-            ))}
+            {(Object.entries(results) as Array<[MovementId, number]>).map(([m, repsDone]) => {
+              const hit = repsDone >= movementReps(progression, m)
+              return (
+                <p key={m} className="text-zinc-300">
+                  <span className={hit ? 'text-emerald-400' : 'text-rose-400'}>
+                    {hit ? '✓' : '✗'}
+                  </span>{' '}
+                  {MOVEMENT_NAMES[m]}: {movementTarget(progression, m)} — {repsDone} reps done
+                </p>
+              )
+            })}
             {!saved ? (
               <button
                 type="button"
@@ -203,16 +214,38 @@ function MovementStep({
   progression,
   result,
   timerDone,
+  countdownSeconds,
   onTimerDone,
   onResult,
 }: {
   movement: MovementId
   progression: ProgressionState
-  result: boolean | undefined
+  result: number | undefined
   timerDone: boolean
+  countdownSeconds: number
   onTimerDone: () => void
-  onResult: (hit: boolean) => void
+  onResult: (repsDone: number) => void
 }) {
+  const targetReps = movementReps(progression, movement)
+  const rungs = ladderRungs(progression.cleanPress)
+
+  const finishEmom = (m: 'swing' | 'tgu' | 'squat') => (completedMs: number) => {
+    onResult(emomRepsDone(progression, m, completedMs))
+    onTimerDone()
+  }
+  const finishPullover = (completed: number) => {
+    onResult(pulloverRepsDone(progression, completed))
+    onTimerDone()
+  }
+  const finishSplitSquat = (completed: number) => {
+    onResult(splitSquatRepsDone(completed))
+    onTimerDone()
+  }
+  const finishCleanPress = (completed: number) => {
+    onResult(cleanPressRepsDone(rungs, completed))
+    onTimerDone()
+  }
+
   return (
     <div>
       <div className="text-center">
@@ -234,7 +267,8 @@ function MovementStep({
           repsText={`${progression.swing.repsPerMinute} ${
             progression.swing.style === 'single-arm' ? 'single-arm ' : ''
           }swings`}
-          onDone={onTimerDone}
+          countdownSeconds={countdownSeconds}
+          onDone={finishEmom('swing')}
         />
       )}
       {movement === 'tgu' && (
@@ -242,24 +276,23 @@ function MovementStep({
           totalMinutes={progression.tgu.minutes}
           repsText="1 get-up"
           minuteLabel={(i) => (i % 2 === 0 ? 'Left side' : 'Right side')}
-          onDone={onTimerDone}
+          countdownSeconds={countdownSeconds}
+          onDone={finishEmom('tgu')}
         />
       )}
       {movement === 'pullover' && (
         <SetTracker
           sets={LIMITS.pulloverSets}
           repsText={`${progression.pullover.reps} pullovers`}
-          onDone={onTimerDone}
+          onDone={finishPullover}
         />
       )}
-      {movement === 'cleanPress' && (
-        <LadderTracker rungs={ladderRungs(progression.cleanPress)} onDone={onTimerDone} />
-      )}
+      {movement === 'cleanPress' && <LadderTracker rungs={rungs} onDone={finishCleanPress} />}
       {movement === 'splitSquat' && (
         <SetTracker
           sets={LIMITS.splitSquatSets}
           repsText={`${LIMITS.splitSquatReps} per leg`}
-          onDone={onTimerDone}
+          onDone={finishSplitSquat}
         />
       )}
       {movement === 'squat' && (
@@ -268,15 +301,16 @@ function MovementStep({
           repsText={`${progression.squat.repsPerMinute} ${
             progression.squat.style === 'goblet' ? 'goblet' : 'front-rack'
           } squats`}
-          onDone={onTimerDone}
+          countdownSeconds={countdownSeconds}
+          onDone={finishEmom('squat')}
         />
       )}
 
       {timerDone || result !== undefined ? (
-        <GoalCheck value={result} onChange={onResult} />
+        <RepsCheck targetReps={targetReps} value={result} onChange={onResult} />
       ) : (
         <p className="pt-2 text-center text-sm text-zinc-500">
-          Finish (or end) the timer to record whether you hit the goal.
+          Finish (or end) the timer to record how many reps you completed.
         </p>
       )}
     </div>

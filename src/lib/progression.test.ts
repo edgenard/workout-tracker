@@ -9,9 +9,13 @@ import {
   advanceSwing,
   advanceTgu,
   applyResults,
+  cleanPressRepsDone,
+  emomRepsDone,
   ladderRungs,
   movementReps,
   movementUsesBell,
+  pulloverRepsDone,
+  splitSquatRepsDone,
 } from './progression'
 import { convertWeight, entryVolume } from './volume'
 import type { WorkoutLogEntry } from './types'
@@ -182,18 +186,42 @@ describe('volume', () => {
     expect(convertWeight(16, 'kg', 'kg')).toBe(16)
   })
 
-  it('sums reps × weight across a workout in the display unit', () => {
+  it('sums repsDone × weight across a workout in the display unit', () => {
     const entry: WorkoutLogEntry = {
       id: 'x',
       date: '2026-07-06T10:00:00Z',
       day: 'a',
       results: [
-        { movement: 'swing', target: '', hit: true, reps: 100, weight: 16, unit: 'kg' },
-        { movement: 'tgu', target: '', hit: true, reps: 10, weight: 16, unit: 'kg' },
-        { movement: 'pullover', target: '', hit: false, reps: 30, weight: 16, unit: 'kg' },
+        {
+          movement: 'swing',
+          target: '',
+          hit: true,
+          targetReps: 100,
+          repsDone: 100,
+          weight: 16,
+          unit: 'kg',
+        },
+        {
+          movement: 'tgu',
+          target: '',
+          hit: true,
+          targetReps: 10,
+          repsDone: 10,
+          weight: 16,
+          unit: 'kg',
+        },
+        {
+          movement: 'pullover',
+          target: '',
+          hit: false,
+          targetReps: 30,
+          repsDone: 20,
+          weight: 16,
+          unit: 'kg',
+        },
       ],
     }
-    expect(entryVolume(entry, 'kg')).toBe(140 * 16)
+    expect(entryVolume(entry, 'kg')).toBe(130 * 16)
   })
 
   it('returns null for legacy entries without weight data', () => {
@@ -212,11 +240,52 @@ describe('volume', () => {
       date: '2026-07-06T10:00:00Z',
       day: 'b',
       results: [
-        { movement: 'squat', target: '', hit: true, reps: 60, weight: 16, unit: 'kg' },
-        { movement: 'splitSquat', target: '', hit: true, reps: 50, weight: 0, unit: 'kg' },
+        {
+          movement: 'squat',
+          target: '',
+          hit: true,
+          targetReps: 60,
+          repsDone: 60,
+          weight: 16,
+          unit: 'kg',
+        },
+        {
+          movement: 'splitSquat',
+          target: '',
+          hit: true,
+          targetReps: 50,
+          repsDone: 50,
+          weight: 0,
+          unit: 'kg',
+        },
       ],
     }
     expect(entryVolume(entry, 'kg')).toBe(960)
+  })
+})
+
+describe('reps-done calculators (actual completion, not just goal)', () => {
+  it('emomRepsDone counts whole completed minutes, capped at the target', () => {
+    // 8 minutes into a 10-min TGU EMOM = 8 reps (4 per side)
+    expect(emomRepsDone(DEFAULT_PROGRESSION, 'tgu', 8 * 60_000)).toBe(8)
+    // Swing at 10 reps/min, stopped 3.5 minutes in = 3 complete minutes
+    expect(emomRepsDone(DEFAULT_PROGRESSION, 'swing', 3.5 * 60_000)).toBe(30)
+    // Finishing the full EMOM never exceeds the target
+    expect(emomRepsDone(DEFAULT_PROGRESSION, 'swing', 999 * 60_000)).toBe(100)
+  })
+
+  it('pulloverRepsDone multiplies completed sets by reps per set', () => {
+    expect(pulloverRepsDone(DEFAULT_PROGRESSION, 2)).toBe(20)
+  })
+
+  it('splitSquatRepsDone counts both legs per completed set', () => {
+    expect(splitSquatRepsDone(3)).toBe(3 * 5 * 2)
+  })
+
+  it('cleanPressRepsDone sums completed rungs for both arms', () => {
+    const rungs = ladderRungs({ ladderTop: 3, ladders: 1 }) // 3-2-1
+    expect(cleanPressRepsDone(rungs, 2)).toBe((3 + 2) * 2)
+    expect(cleanPressRepsDone(rungs, 0)).toBe(0)
   })
 })
 

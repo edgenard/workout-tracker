@@ -269,3 +269,34 @@ export function ladderRungs(c: CleanPressState): Array<{ ladder: number; reps: n
   }
   return rungs
 }
+
+/** Reps actually completed in an EMOM movement, assuming pace was kept for whole minutes run */
+export function emomRepsDone(
+  p: ProgressionState,
+  m: 'swing' | 'tgu' | 'squat',
+  completedMs: number,
+): number {
+  const totalMinutes = m === 'swing' ? p.swing.minutes : m === 'tgu' ? p.tgu.minutes : p.squat.minutes
+  const completedMinutes = Math.min(totalMinutes, Math.floor(completedMs / 60_000))
+  if (m === 'tgu') return completedMinutes // 1 rep per minute
+  const repsPerMinute = m === 'swing' ? p.swing.repsPerMinute : p.squat.repsPerMinute
+  return completedMinutes * repsPerMinute
+}
+
+/** Reps actually completed for the ATG shoulder armor pullovers */
+export function pulloverRepsDone(p: ProgressionState, completedSets: number): number {
+  return completedSets * p.pullover.reps
+}
+
+/** Reps actually completed for the ATG split squat (both legs) */
+export function splitSquatRepsDone(completedSets: number): number {
+  return completedSets * LIMITS.splitSquatReps * 2
+}
+
+/** Reps actually completed for the clean & press ladder tracker (both arms) */
+export function cleanPressRepsDone(
+  rungs: Array<{ ladder: number; reps: number }>,
+  completedRungs: number,
+): number {
+  return rungs.slice(0, completedRungs).reduce((sum, r) => sum + r.reps, 0) * 2
+}

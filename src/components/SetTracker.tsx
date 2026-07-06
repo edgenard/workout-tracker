@@ -6,7 +6,8 @@ interface SetTrackerProps {
   sets: number
   /** Big text shown for each set, e.g. "12 reps" or "5 per leg" */
   repsText: string
-  onDone: () => void
+  /** Called with the number of sets actually completed */
+  onDone: (completed: number) => void
 }
 
 /**
@@ -29,7 +30,7 @@ export function SetTracker({ sets, repsText, onDone }: SetTrackerProps) {
     if (next >= sets) {
       finishBeep()
       finish()
-      onDone()
+      onDone(next)
     } else {
       minuteBeep()
     }
@@ -98,7 +99,7 @@ export function SetTracker({ sets, repsText, onDone }: SetTrackerProps) {
           className="rounded-lg border border-zinc-700 px-6 py-2 font-semibold text-zinc-400 hover:bg-zinc-800"
           onClick={() => {
             finish()
-            onDone()
+            onDone(completed)
           }}
         >
           End early

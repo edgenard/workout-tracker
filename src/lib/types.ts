@@ -73,6 +73,8 @@ export interface BellState {
 
 export interface WorkoutSettingsState {
   transitionSeconds: number
+  /** How many seconds before a timer boundary the countdown beep starts */
+  countdownSeconds: number
 }
 
 export interface MovementResult {
@@ -80,8 +82,10 @@ export interface MovementResult {
   /** Human-readable target that was attempted, frozen at log time */
   target: string
   hit: boolean
-  /** Total reps in the attempted target, frozen at log time (absent on legacy entries) */
-  reps?: number
+  /** Goal reps for the attempted target, frozen at log time (absent on legacy entries) */
+  targetReps?: number
+  /** Reps actually completed (absent on legacy entries) */
+  repsDone?: number
   /** Bell weight used (0 while a movement is still at a bodyweight stage) */
   weight?: number
   unit?: WeightUnit

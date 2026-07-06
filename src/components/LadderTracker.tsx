@@ -5,7 +5,8 @@ import { formatClock, useStopwatch, useWakeLock } from '#/lib/useStopwatch'
 interface LadderTrackerProps {
   /** Rungs in order, e.g. 3-2-1 × 3 ladders → 9 rungs */
   rungs: Array<{ ladder: number; reps: number }>
-  onDone: () => void
+  /** Called with the number of rungs actually completed */
+  onDone: (completed: number) => void
 }
 
 /**
@@ -29,7 +30,7 @@ export function LadderTracker({ rungs, onDone }: LadderTrackerProps) {
     if (next >= rungs.length) {
       finishBeep()
       finish()
-      onDone()
+      onDone(next)
     } else {
       minuteBeep()
     }
@@ -102,7 +103,7 @@ export function LadderTracker({ rungs, onDone }: LadderTrackerProps) {
           className="rounded-lg border border-zinc-700 px-6 py-2 font-semibold text-zinc-400 hover:bg-zinc-800"
           onClick={() => {
             finish()
-            onDone()
+            onDone(completed)
           }}
         >
           End early

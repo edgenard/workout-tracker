@@ -63,6 +63,9 @@ function History() {
                         @ {r.weight > 0 ? `${r.weight} ${r.unit}` : 'bodyweight'}
                       </span>
                     )}
+                    {r.repsDone !== undefined && r.targetReps !== undefined && (
+                      <span className="text-zinc-500"> — {r.repsDone}/{r.targetReps} reps</span>
+                    )}
                   </li>
                 ))}
               </ul>

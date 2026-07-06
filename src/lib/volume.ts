@@ -15,9 +15,9 @@ export function entryVolume(entry: WorkoutLogEntry, displayUnit: WeightUnit): nu
   let total = 0
   let hasData = false
   for (const r of entry.results) {
-    if (r.reps === undefined || r.weight === undefined) continue
+    if (r.repsDone === undefined || r.weight === undefined) continue
     hasData = true
-    total += r.reps * convertWeight(r.weight, r.unit ?? 'kg', displayUnit)
+    total += r.repsDone * convertWeight(r.weight, r.unit ?? 'kg', displayUnit)
   }
   return hasData ? total : null
 }
@@ -28,10 +28,10 @@ export function entryBreakdown(
   displayUnit: WeightUnit,
 ): Array<{ movement: string; volume: number }> {
   return entry.results
-    .filter((r) => r.reps !== undefined && r.weight !== undefined)
+    .filter((r) => r.repsDone !== undefined && r.weight !== undefined)
     .map((r) => ({
       movement: r.movement,
-      volume: r.reps! * convertWeight(r.weight!, r.unit ?? 'kg', displayUnit),
+      volume: r.repsDone! * convertWeight(r.weight!, r.unit ?? 'kg', displayUnit),
     }))
 }
 

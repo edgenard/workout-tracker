@@ -12,11 +12,19 @@ interface SegmentTimerProps {
   title: string
   segments: Array<TimerSegment>
   transitionSeconds?: number
+  /** Seconds before a phase/switch boundary to start the countdown beep */
+  countdownSeconds?: number
   onDone: () => void
 }
 
 /** Guided interval timer for the warm-up / cool-down sequences */
-export function SegmentTimer({ title, segments, transitionSeconds = 5, onDone }: SegmentTimerProps) {
+export function SegmentTimer({
+  title,
+  segments,
+  transitionSeconds = 5,
+  countdownSeconds = 5,
+  onDone,
+}: SegmentTimerProps) {
   const { status, elapsedMs, start, pause, resume, seek, finish } = useStopwatch()
   useWakeLock(status === 'running')
 
@@ -80,7 +88,7 @@ export function SegmentTimer({ title, segments, transitionSeconds = 5, onDone }:
             Number.POSITIVE_INFINITY,
           )
     const remaining = Math.ceil(tickBoundary - nowSec)
-    if (remaining <= 3 && remaining >= 1) {
+    if (remaining <= countdownSeconds && remaining >= 1) {
       const key = `${tickBoundary}:${remaining}`
       if (key !== lastTickKeyRef.current) {
         lastTickKeyRef.current = key
@@ -94,6 +102,7 @@ export function SegmentTimer({ title, segments, transitionSeconds = 5, onDone }:
     currentPhase,
     totalSeconds,
     switchPoints,
+    countdownSeconds,
     finish,
     onDone,
   ])

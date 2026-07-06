@@ -56,12 +56,13 @@ function Progress() {
         return { x: Date.parse(e.date), y: v, hit: e.results.every((r) => r.hit), entry: e }
       }
       const r = e.results.find(
-        (res) => res.movement === movement && res.reps !== undefined && res.weight !== undefined,
+        (res) =>
+          res.movement === movement && res.repsDone !== undefined && res.weight !== undefined,
       )
       if (!r) return null
       return {
         x: Date.parse(e.date),
-        y: r.reps! * convertWeight(r.weight!, r.unit ?? 'kg', bell.unit),
+        y: r.repsDone! * convertWeight(r.weight!, r.unit ?? 'kg', bell.unit),
         hit: r.hit,
         entry: e,
       }
@@ -415,7 +416,7 @@ function VolumeChart({ series, unit }: { series: Array<Series>; unit: string }) 
             )}
             <ul className="mt-2 space-y-0.5 text-xs text-zinc-400">
               {hover.point.entry.results
-                .filter((r) => r.reps !== undefined && r.weight !== undefined)
+                .filter((r) => r.repsDone !== undefined && r.weight !== undefined)
                 .map((r) => (
                   <li key={r.movement} className="flex justify-between gap-2">
                     <span>
@@ -423,7 +424,9 @@ function VolumeChart({ series, unit }: { series: Array<Series>; unit: string }) 
                       {!r.hit && ' (missed)'}
                     </span>
                     <span className="tabular-nums">
-                      {formatVolume(r.reps! * convertWeight(r.weight!, r.unit ?? 'kg', unit as 'kg' | 'lb'))}
+                      {formatVolume(
+                        r.repsDone! * convertWeight(r.weight!, r.unit ?? 'kg', unit as 'kg' | 'lb'),
+                      )}
                     </span>
                   </li>
                 ))}

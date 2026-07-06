@@ -19,6 +19,10 @@ function clamp(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, Math.round(n)))
 }
 
+function clampMin(n: number, min: number): number {
+  return Math.max(min, Math.round(n))
+}
+
 const numberInput =
   'w-20 rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-center font-semibold'
 const selectInput =
@@ -57,6 +61,30 @@ function Settings() {
               setWorkoutSettings({
                 ...settings,
                 transitionSeconds: clamp(e.target.valueAsNumber || 0, 0, 60),
+              })
+            }
+          />
+        </label>
+      </section>
+
+      <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
+        <p className="font-bold text-emerald-400">Timer Sounds</p>
+        <p className="mb-3 text-sm text-zinc-500">
+          Plays a beep each second for the last few seconds of every exercise timer (EMOM
+          minutes, warm-up/cool-down segments, and switches).
+        </p>
+        <label className="flex items-center gap-2 text-sm">
+          Countdown beep — last N seconds
+          <input
+            type="number"
+            min={0}
+            max={15}
+            className={numberInput}
+            value={settings.countdownSeconds}
+            onChange={(e) =>
+              setWorkoutSettings({
+                ...settings,
+                countdownSeconds: clamp(e.target.valueAsNumber || 0, 0, 15),
               })
             }
           />
@@ -126,7 +154,6 @@ function Settings() {
             <input
               type="number"
               min={1}
-              max={LIMITS.swingMaxReps}
               className={numberInput}
               value={p.swing.repsPerMinute}
               onChange={(e) =>
@@ -134,7 +161,7 @@ function Settings() {
                   ...p,
                   swing: {
                     ...p.swing,
-                    repsPerMinute: clamp(e.target.valueAsNumber || 1, 1, LIMITS.swingMaxReps),
+                    repsPerMinute: clampMin(e.target.valueAsNumber || 1, 1),
                   },
                 })
               }
@@ -144,8 +171,7 @@ function Settings() {
             Minutes
             <input
               type="number"
-              min={LIMITS.emomMinMinutes}
-              max={LIMITS.emomMaxMinutes}
+              min={1}
               className={numberInput}
               value={p.swing.minutes}
               onChange={(e) =>
@@ -153,11 +179,7 @@ function Settings() {
                   ...p,
                   swing: {
                     ...p.swing,
-                    minutes: clamp(
-                      e.target.valueAsNumber || LIMITS.emomMinMinutes,
-                      LIMITS.emomMinMinutes,
-                      LIMITS.emomMaxMinutes,
-                    ),
+                    minutes: clampMin(e.target.valueAsNumber || 1, 1),
                   },
                 })
               }
@@ -273,7 +295,6 @@ function Settings() {
             <input
               type="number"
               min={1}
-              max={LIMITS.squatMaxReps}
               className={numberInput}
               value={p.squat.repsPerMinute}
               onChange={(e) =>
@@ -281,7 +302,7 @@ function Settings() {
                   ...p,
                   squat: {
                     ...p.squat,
-                    repsPerMinute: clamp(e.target.valueAsNumber || 1, 1, LIMITS.squatMaxReps),
+                    repsPerMinute: clampMin(e.target.valueAsNumber || 1, 1),
                   },
                 })
               }
@@ -291,8 +312,7 @@ function Settings() {
             Minutes
             <input
               type="number"
-              min={LIMITS.emomMinMinutes}
-              max={LIMITS.emomMaxMinutes}
+              min={1}
               className={numberInput}
               value={p.squat.minutes}
               onChange={(e) =>
@@ -300,11 +320,7 @@ function Settings() {
                   ...p,
                   squat: {
                     ...p.squat,
-                    minutes: clamp(
-                      e.target.valueAsNumber || LIMITS.emomMinMinutes,
-                      LIMITS.emomMinMinutes,
-                      LIMITS.emomMaxMinutes,
-                    ),
+                    minutes: clampMin(e.target.valueAsNumber || 1, 1),
                   },
                 })
               }
@@ -320,19 +336,14 @@ function Settings() {
           Reps per set
           <input
             type="number"
-            min={LIMITS.pulloverMinReps}
-            max={LIMITS.pulloverMaxReps}
+            min={1}
             className={numberInput}
             value={p.pullover.reps}
             onChange={(e) =>
               setProgression({
                 ...p,
                 pullover: {
-                  reps: clamp(
-                    e.target.valueAsNumber || LIMITS.pulloverMinReps,
-                    LIMITS.pulloverMinReps,
-                    LIMITS.pulloverMaxReps,
-                  ),
+                  reps: clampMin(e.target.valueAsNumber || 1, 1),
                 },
               })
             }

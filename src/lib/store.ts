@@ -20,7 +20,10 @@ const BELL_KEY = 'workout-tracker:bell:v1'
 const SETTINGS_KEY = 'workout-tracker:settings:v1'
 
 export const DEFAULT_BELL: BellState = { weight: 16, unit: 'kg' }
-export const DEFAULT_WORKOUT_SETTINGS: WorkoutSettingsState = { transitionSeconds: 5 }
+export const DEFAULT_WORKOUT_SETTINGS: WorkoutSettingsState = {
+  transitionSeconds: 5,
+  countdownSeconds: 5,
+}
 
 function load<T>(key: string, fallback: T): T {
   if (typeof window === 'undefined') return fallback
@@ -80,26 +83,33 @@ export function setWorkoutSettings(next: WorkoutSettingsState): void {
 
 export function saveWorkout(
   day: WorkoutLogEntry['day'],
-  results: Partial<Record<MovementId, boolean>>,
+  results: Partial<Record<MovementId, number>>,
 ): void {
   const progression = progressionStore.state
+  const hits: Partial<Record<MovementId, boolean>> = {}
   const entry: WorkoutLogEntry = {
     id: crypto.randomUUID(),
     date: new Date().toISOString(),
     day,
-    results: (Object.entries(results) as Array<[MovementId, boolean]>).map(
-      ([movement, hit]) => ({
-        movement,
-        target: movementTarget(progression, movement),
-        hit,
-        reps: movementReps(progression, movement),
-        weight: movementUsesBell(progression, movement) ? bellStore.state.weight : 0,
-        unit: bellStore.state.unit,
-      }),
+    results: (Object.entries(results) as Array<[MovementId, number]>).map(
+      ([movement, repsDone]) => {
+        const targetReps = movementReps(progression, movement)
+        const hit = repsDone >= targetReps
+        hits[movement] = hit
+        return {
+          movement,
+          target: movementTarget(progression, movement),
+          hit,
+          targetReps,
+          repsDone,
+          weight: movementUsesBell(progression, movement) ? bellStore.state.weight : 0,
+          unit: bellStore.state.unit,
+        }
+      },
     ),
   }
   historyStore.setState((h) => [entry, ...h])
-  progressionStore.setState((p) => applyResults(p, results))
+  progressionStore.setState((p) => applyResults(p, hits))
 }
 
 export function deleteWorkout(id: string): void {

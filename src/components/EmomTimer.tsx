@@ -8,10 +8,19 @@ interface EmomTimerProps {
   repsText: string
   /** Optional per-minute label, e.g. Left/Right for alternating TGU */
   minuteLabel?: (minuteIndex: number) => string
-  onDone: () => void
+  /** Seconds before the top of the minute to start the countdown beep */
+  countdownSeconds?: number
+  /** Called with elapsed ms (total on natural finish, elapsed-so-far on early end) */
+  onDone: (completedMs: number) => void
 }
 
-export function EmomTimer({ totalMinutes, repsText, minuteLabel, onDone }: EmomTimerProps) {
+export function EmomTimer({
+  totalMinutes,
+  repsText,
+  minuteLabel,
+  countdownSeconds = 5,
+  onDone,
+}: EmomTimerProps) {
   const { status, elapsedMs, start, pause, resume, finish } = useStopwatch()
   useWakeLock(status === 'running')
 
@@ -32,7 +41,7 @@ export function EmomTimer({ totalMinutes, repsText, minuteLabel, onDone }: EmomT
         doneRef.current = true
         finishBeep()
         finish()
-        onDone()
+        onDone(totalMs)
       }
       return
     }
@@ -42,17 +51,17 @@ export function EmomTimer({ totalMinutes, repsText, minuteLabel, onDone }: EmomT
       minuteBeep()
     }
     const s = Math.floor((elapsedMs % 60_000) / 1000)
-    if (s >= 57 && s !== lastTickSecRef.current) {
+    if (s >= 60 - countdownSeconds && s !== lastTickSecRef.current) {
       lastTickSecRef.current = s
       tick()
     }
-  }, [elapsedMs, status, totalMs, finish, onDone])
+  }, [elapsedMs, status, totalMs, countdownSeconds, finish, onDone])
 
   const endEarly = () => {
     if (doneRef.current) return
     doneRef.current = true
     finish()
-    onDone()
+    onDone(elapsedMs)
   }
 
   if (status === 'idle') {
@@ -84,7 +93,11 @@ export function EmomTimer({ totalMinutes, repsText, minuteLabel, onDone }: EmomT
       </p>
       <p
         className={`text-7xl font-black tabular-nums ${
-          status === 'done' ? 'text-emerald-400' : secRemaining <= 3 ? 'text-amber-400' : ''
+          status === 'done'
+            ? 'text-emerald-400'
+            : secRemaining <= countdownSeconds
+              ? 'text-amber-400'
+              : ''
         }`}
       >
         {status === 'done' ? 'Done' : `0:${String(secRemaining === 60 ? 0 : secRemaining).padStart(2, '0')}`}
