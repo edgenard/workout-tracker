@@ -2,6 +2,7 @@ import { Store } from '@tanstack/store'
 import { DEFAULT_WORKOUTS } from './movementData'
 import { formatTarget, targetReps } from './planText'
 import { resetPresentationSettings } from './presentationSettings'
+import { recordedLoad } from './volume'
 import type { DayId, Emom, Ladder, RepsAndSets, Workout, WorkoutLogEntry, WorkoutSettingsState } from './types'
 
 const WORKOUTS_KEY = 'workout-tracker:workouts:v1'
@@ -180,8 +181,7 @@ export function saveWorkout(day: DayId, results: Array<LoggedResult>): void {
         hit: result.repsDone >= goal,
         targetReps: goal,
         repsDone: result.repsDone,
-        weight: result.phase.equipment?.weight ?? 0,
-        unit: result.phase.equipment?.weightUnit,
+        ...recordedLoad(result.phase.equipment),
       }
     }),
   }

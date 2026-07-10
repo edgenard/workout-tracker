@@ -1,13 +1,18 @@
 import { useMemo, useRef, useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
+import { niceTicks } from '#/lib/chartScale'
 import { MOVEMENTS } from '#/lib/movementData'
 import { DAY_INFO } from '#/lib/plan'
 import { historyStore, setWorkoutSettings, settingsStore } from '#/lib/store'
-import { convertWeight, entryVolume, formatVolume } from '#/lib/volume'
-import type { WorkoutLogEntry } from '#/lib/types'
+import { entryVolume, formatVolume, progressMetricLabel, progressValue } from '#/lib/volume'
+import type { MovementResult, WorkoutLogEntry } from '#/lib/types'
+import type { ProgressKind } from '#/lib/volume'
 
-export const Route = createFileRoute('/progress')({ component: Progress, ssr: false })
+export const Route = createFileRoute('/progress')({
+  component: Progress,
+  ssr: false,
+})
 
 // Categorical slots 1–2, validated for CVD + 3:1 contrast on the zinc-900 surface
 const SERIES_COLORS: Record<'a' | 'b', string> = { a: '#3987e5', b: '#199e70' }
@@ -20,6 +25,7 @@ interface Point {
   session?: number
   hit: boolean
   entry: WorkoutLogEntry
+  result?: MovementResult
 }
 
 interface Series {
@@ -29,13 +35,50 @@ interface Series {
   points: Array<Point>
 }
 
+interface MovementOption {
+  key: string
+  label: string
+  kind: ProgressKind
+}
+
+function movementName(id: string): string {
+  return Object.values(MOVEMENTS).find((candidate) => candidate.id === id)?.name ?? id
+}
+
+function movementOption(result: MovementResult): MovementOption | null {
+  const progress = progressValue(result, 'kg')
+  if (!progress) return null
+  const suffix =
+    result.movement === 'splitSquat'
+      ? progress.kind === 'bodyweight'
+        ? ' (Bodyweight)'
+        : ' (Weighted)'
+      : ''
+  return {
+    key: progress.key,
+    label: `${movementName(result.movement)}${suffix}`,
+    kind: progress.kind,
+  }
+}
+
 function Progress() {
   const history = useStore(historyStore)
   const settings = useStore(settingsStore)
   const [movement, setMovement] = useState<string>('all')
   const [view, setView] = useState<'perWorkout' | 'cumulative'>('perWorkout')
-  const movementIds = useMemo(() => [...new Set(history.flatMap((entry) => entry.results.map((result) => result.movement)))], [history])
-  const movementName = (id: string) => Object.values(MOVEMENTS).find((candidate) => candidate.id === id)?.name ?? id
+  const movementOptions = useMemo(() => {
+    const options = new Map<string, MovementOption>()
+    for (const result of history.flatMap((entry) => entry.results)) {
+      const option = movementOption(result)
+      if (option) options.set(option.key, option)
+    }
+    return [...options.values()]
+  }, [history])
+  const selectedOption = movementOptions.find((option) => option.key === movement)
+  const metricLabel =
+    movement === 'all'
+      ? 'output'
+      : progressMetricLabel(selectedOption?.kind ?? 'weighted', settings.displayUnit)
 
   const { series, runningTotals } = useMemo(() => {
     const entries = [...history]
@@ -46,18 +89,26 @@ function Progress() {
       if (movement === 'all') {
         const v = entryVolume(e, settings.displayUnit)
         if (v === null) return null
-        return { x: Date.parse(e.date), y: v, hit: e.results.every((r) => r.hit), entry: e }
+        return {
+          x: Date.parse(e.date),
+          y: v,
+          hit: e.results.every((r) => r.hit),
+          entry: e,
+        }
       }
-      const r = e.results.find(
-        (res) =>
-          res.movement === movement && res.repsDone !== undefined && res.weight !== undefined,
-      )
-      if (!r) return null
+      const match = e.results
+        .map((result) => ({
+          result,
+          progress: progressValue(result, settings.displayUnit),
+        }))
+        .find(({ progress }) => progress?.key === movement)
+      if (!match?.progress) return null
       return {
         x: Date.parse(e.date),
-        y: r.repsDone! * convertWeight(r.weight!, r.unit ?? 'kg', settings.displayUnit),
-        hit: r.hit,
+        y: match.progress.value,
+        hit: match.result.hit,
         entry: e,
+        result: match.result,
       }
     }
 
@@ -76,7 +127,7 @@ function Progress() {
       series = [
         {
           id: 'cumulative',
-          label: 'Cumulative volume',
+          label: 'Cumulative output',
           color: SERIES_COLORS.a,
           points: allPoints.map((p) => ({
             ...p,
@@ -108,7 +159,7 @@ function Progress() {
       <div>
         <h1 className="text-2xl font-black">Progress</h1>
         <p className="mt-2 text-zinc-400">
-          Total output per workout — reps × recorded weight. Bodyweight work counts as zero.
+          Weighted output uses reps × recorded weight. Bodyweight output uses completed reps.
         </p>
       </div>
 
@@ -124,15 +175,24 @@ function Progress() {
             onChange={(e) => setMovement(e.target.value)}
           >
             <option value="all">All (session total)</option>
-            {movementIds.map((m) => (
-              <option key={m} value={m}>
-                {movementName(m)}
+            {movementOptions.map((option) => (
+              <option key={option.key} value={option.key}>
+                {option.label}
               </option>
             ))}
           </select>
         </div>
         <div className="flex overflow-hidden rounded-lg border border-zinc-700 text-sm font-semibold">
-          {(['kg', 'lb'] as const).map((unit) => <button key={unit} type="button" className={`px-3 py-1.5 ${settings.displayUnit === unit ? 'bg-zinc-100 text-zinc-950' : 'text-zinc-400 hover:bg-zinc-800'}`} onClick={() => setWorkoutSettings({ displayUnit: unit })}>{unit}</button>)}
+          {(['kg', 'lb'] as const).map((unit) => (
+            <button
+              key={unit}
+              type="button"
+              className={`px-3 py-1.5 ${settings.displayUnit === unit ? 'bg-zinc-100 text-zinc-950' : 'text-zinc-400 hover:bg-zinc-800'}`}
+              onClick={() => setWorkoutSettings({ displayUnit: unit })}
+            >
+              {unit}
+            </button>
+          ))}
         </div>
         <div className="flex overflow-hidden rounded-lg border border-zinc-700 text-sm font-semibold">
           {(
@@ -157,7 +217,12 @@ function Progress() {
 
       <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
         {hasData ? (
-          <VolumeChart key={`${movement}:${view}:${settings.displayUnit}`} series={series} unit={settings.displayUnit} />
+          <VolumeChart
+            key={`${movement}:${view}:${settings.displayUnit}`}
+            series={series}
+            displayUnit={settings.displayUnit}
+            metricLabel={metricLabel}
+          />
         ) : (
           <p className="py-12 text-center text-zinc-500">
             No charted workouts yet. Finish and save a session and it will appear here.
@@ -181,7 +246,11 @@ function Progress() {
                   <th className="px-4 py-2 font-semibold">Date</th>
                   <th className="px-4 py-2 font-semibold">Day</th>
                   <th className="px-4 py-2 text-right font-semibold">
-                    Volume ({settings.displayUnit}·reps)
+                    {movement === 'all'
+                      ? 'Output'
+                      : selectedOption?.kind === 'bodyweight'
+                        ? 'Reps'
+                        : `Volume (${metricLabel})`}
                   </th>
                   <th className="px-4 py-2 text-right font-semibold">Running total</th>
                   <th className="px-4 py-2 text-right font-semibold">Goals</th>
@@ -225,17 +294,15 @@ const W = 720
 const H = 300
 const M = { top: 16, right: 16, bottom: 28, left: 52 }
 
-function niceTicks(max: number): Array<number> {
-  if (max <= 0) return [0]
-  const rough = max / 4
-  const pow = 10 ** Math.floor(Math.log10(rough))
-  const step = [1, 2, 2.5, 5, 10].map((s) => s * pow).find((s) => s >= rough) ?? pow * 10
-  const ticks: Array<number> = []
-  for (let v = 0; v <= max + step * 0.001; v += step) ticks.push(v)
-  return ticks
-}
-
-function VolumeChart({ series, unit }: { series: Array<Series>; unit: string }) {
+function VolumeChart({
+  series,
+  displayUnit,
+  metricLabel,
+}: {
+  series: Array<Series>
+  displayUnit: 'kg' | 'lb'
+  metricLabel: string
+}) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const [hover, setHover] = useState<{ point: Point; series: Series } | null>(null)
 
@@ -248,12 +315,14 @@ function VolumeChart({ series, unit }: { series: Array<Series>; unit: string }) 
   const yTicks = niceTicks(Math.max(...ys) * 1.05)
   const yMax = yTicks[yTicks.length - 1] || 1
 
-  const px = (x: number) => M.left + ((x - (xMin + xMax) / 2 + xSpan / 2) / xSpan) * (W - M.left - M.right)
+  const px = (x: number) =>
+    M.left + ((x - (xMin + xMax) / 2 + xSpan / 2) / xSpan) * (W - M.left - M.right)
   const py = (y: number) => H - M.bottom - (y / yMax) * (H - M.top - M.bottom)
 
   const xTickCount = Math.min(5, new Set(xs).size)
-  const xTicks = Array.from({ length: xTickCount }, (_, i) =>
-    xMin + ((xMax - xMin) * i) / Math.max(xTickCount - 1, 1),
+  const xTicks = Array.from(
+    { length: xTickCount },
+    (_, i) => xMin + ((xMax - xMin) * i) / Math.max(xTickCount - 1, 1),
   )
 
   const findNearest = (clientX: number) => {
@@ -273,7 +342,10 @@ function VolumeChart({ series, unit }: { series: Array<Series>; unit: string }) 
   }
 
   const fmtDate = (ms: number) =>
-    new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+    new Date(ms).toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+    })
 
   return (
     <div>
@@ -293,7 +365,7 @@ function VolumeChart({ series, unit }: { series: Array<Series>; unit: string }) 
           viewBox={`0 0 ${W} ${H}`}
           className="w-full touch-none select-none"
           role="img"
-          aria-label={`Workout volume over time in ${unit} times reps`}
+          aria-label={`Workout progress over time in ${metricLabel}`}
           onPointerMove={(e) => setHover(findNearest(e.clientX))}
           onPointerLeave={() => setHover(null)}
         >
@@ -355,7 +427,9 @@ function VolumeChart({ series, unit }: { series: Array<Series>; unit: string }) 
             <g key={s.id}>
               {s.points.length > 1 && (
                 <path
-                  d={s.points.map((p, i) => `${i === 0 ? 'M' : 'L'}${px(p.x)},${py(p.y)}`).join(' ')}
+                  d={s.points
+                    .map((p, i) => `${i === 0 ? 'M' : 'L'}${px(p.x)},${py(p.y)}`)
+                    .join(' ')}
                   fill="none"
                   stroke={s.color}
                   strokeWidth="2"
@@ -400,27 +474,38 @@ function VolumeChart({ series, unit }: { series: Array<Series>; unit: string }) 
               />
               <span className="font-bold tabular-nums">{formatVolume(hover.point.y)}</span>
               <span className="text-zinc-400">
-                {unit}·reps · {hover.series.label}
+                {metricLabel} · {hover.series.label}
               </span>
             </p>
             {hover.point.session !== undefined && (
               <p className="mt-0.5 text-xs text-zinc-400">
-                +{formatVolume(hover.point.session)} this workout ({DAY_INFO[hover.point.entry.day].title})
+                +{formatVolume(hover.point.session)} this workout (
+                {DAY_INFO[hover.point.entry.day].title})
               </p>
             )}
             <ul className="mt-2 space-y-0.5 text-xs text-zinc-400">
-              {hover.point.entry.results
-                .filter((r) => r.repsDone !== undefined && r.weight !== undefined)
-                .map((r) => (
-                  <li key={r.movement} className="flex justify-between gap-2">
+              {(hover.point.result ? [hover.point.result] : hover.point.entry.results)
+                .map((result) => ({
+                  result,
+                  progress: progressValue(result, displayUnit),
+                }))
+                .filter(
+                  (
+                    item,
+                  ): item is {
+                    result: MovementResult
+                    progress: NonNullable<ReturnType<typeof progressValue>>
+                  } => item.progress !== null,
+                )
+                .map(({ result, progress }) => (
+                  <li key={progress.key} className="flex justify-between gap-2">
                     <span>
-                      {Object.values(MOVEMENTS).find((movement) => movement.id === r.movement)?.name ?? r.movement}
-                      {!r.hit && ' (missed)'}
+                      {movementName(result.movement)}
+                      {!result.hit && ' (missed)'}
                     </span>
                     <span className="tabular-nums">
-                      {formatVolume(
-                        r.repsDone! * convertWeight(r.weight!, r.unit ?? 'kg', unit as 'kg' | 'lb'),
-                      )}
+                      {formatVolume(progress.value)}{' '}
+                      {progressMetricLabel(progress.kind, displayUnit)}
                     </span>
                   </li>
                 ))}

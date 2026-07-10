@@ -3,7 +3,7 @@ import { useStore } from '@tanstack/react-store'
 import { MOVEMENTS } from '#/lib/movementData'
 import { DAY_INFO } from '#/lib/plan'
 import { deleteWorkout, historyStore, settingsStore } from '#/lib/store'
-import { entryVolume, formatVolume } from '#/lib/volume'
+import { entryMetricLabel, entryVolume, formatVolume } from '#/lib/volume'
 
 export const Route = createFileRoute('/history')({ component: History, ssr: false })
 
@@ -78,7 +78,7 @@ function History() {
                     <span className="font-semibold text-zinc-300 tabular-nums">
                       {formatVolume(v)}
                     </span>{' '}
-                    {settings.displayUnit}·reps
+                    {entryMetricLabel(entry, settings.displayUnit)}
                   </p>
                 ) : null
               })()}

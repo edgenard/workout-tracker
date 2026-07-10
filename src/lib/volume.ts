@@ -1,4 +1,4 @@
-import type { WeightUnit, WorkoutLogEntry } from './types'
+import type { Equipment, MovementResult, WeightUnit, WorkoutLogEntry } from './types'
 
 const KG_PER_LB = 0.45359237
 
@@ -7,31 +7,84 @@ export function convertWeight(value: number, from: WeightUnit, to: WeightUnit): 
   return from === 'kg' ? value / KG_PER_LB : value * KG_PER_LB
 }
 
+export type ProgressKind = 'bodyweight' | 'weighted'
+
+export interface ProgressValue {
+  key: string
+  kind: ProgressKind
+  value: number
+}
+
+/** Persist enough load information to classify progress without changing workout domain types. */
+export function recordedLoad(
+  equipment: Equipment | undefined,
+): Pick<MovementResult, 'weight' | 'unit'> {
+  return { weight: equipment?.weight ?? 0, unit: equipment?.weightUnit }
+}
+
+/** Project a logged domain result into the tracking-only identity and metric. */
+export function progressValue(
+  result: MovementResult,
+  displayUnit: WeightUnit,
+): ProgressValue | null {
+  if (result.repsDone === undefined || result.weight === undefined) return null
+
+  const kind: ProgressKind = result.weight > 0 ? 'weighted' : 'bodyweight'
+  return {
+    // Split squats change from bodyweight to loaded work as they progress. Keep
+    // those incomparable metrics on separate charts without changing movement IDs.
+    key: result.movement === 'splitSquat' ? `${result.movement}:${kind}` : result.movement,
+    kind,
+    value:
+      kind === 'bodyweight'
+        ? result.repsDone
+        : result.repsDone * convertWeight(result.weight, result.unit ?? 'kg', displayUnit),
+  }
+}
+
+export function progressMetricLabel(kind: ProgressKind, displayUnit: WeightUnit): string {
+  return kind === 'bodyweight' ? 'reps' : `${displayUnit}·reps`
+}
+
 /**
- * Total output (tonnage) of a logged workout: Σ reps × weight, in the display
- * unit. Null for legacy entries saved before weight tracking existed.
+ * Total output of a logged workout. Weighted work uses reps × weight;
+ * bodyweight work uses reps. Null for entries saved before tracking existed.
  */
 export function entryVolume(entry: WorkoutLogEntry, displayUnit: WeightUnit): number | null {
   let total = 0
   let hasData = false
   for (const r of entry.results) {
-    if (r.repsDone === undefined || r.weight === undefined) continue
+    const progress = progressValue(r, displayUnit)
+    if (!progress) continue
     hasData = true
-    total += r.repsDone * convertWeight(r.weight, r.unit ?? 'kg', displayUnit)
+    total += progress.value
   }
   return hasData ? total : null
 }
 
-/** Per-movement volume rows for tooltips/tables (bodyweight stages show 0) */
+export function entryMetricLabel(entry: WorkoutLogEntry, displayUnit: WeightUnit): string {
+  const kinds = new Set(
+    entry.results
+      .map((result) => progressValue(result, displayUnit)?.kind)
+      .filter((kind): kind is ProgressKind => kind !== undefined),
+  )
+  if (kinds.size !== 1) return 'output'
+  return progressMetricLabel([...kinds][0]!, displayUnit)
+}
+
+/** Per-movement output rows for tooltips/tables. */
 export function entryBreakdown(
   entry: WorkoutLogEntry,
   displayUnit: WeightUnit,
 ): Array<{ movement: string; volume: number }> {
   return entry.results
-    .filter((r) => r.repsDone !== undefined && r.weight !== undefined)
-    .map((r) => ({
-      movement: r.movement,
-      volume: r.repsDone! * convertWeight(r.weight!, r.unit ?? 'kg', displayUnit),
+    .map((result) => ({ result, progress: progressValue(result, displayUnit) }))
+    .filter(
+      (item): item is { result: MovementResult; progress: ProgressValue } => item.progress !== null,
+    )
+    .map(({ result, progress }) => ({
+      movement: result.movement,
+      volume: progress.value,
     }))
 }
 
