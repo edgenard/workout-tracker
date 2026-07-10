@@ -1,64 +1,72 @@
 # Kettlebell Tracker
 
-A local-first web app for a 4-day single-kettlebell program merging Mark Wildman's
-"Tetris of Training" / "Nerd Math" system with Ben Patrick's ATG (Knees Over Toes)
-joint-armor work. All data stays in your browser's localStorage — no accounts, no server.
+A local-first, single-kettlebell workout tracker for a four-day program combining Mark Wildman's "Tetris of Training" / "Nerd Math" approach with ATG (Knees Over Toes) mobility and joint-armor work. It is a static web app: no account or server required.
 
-## What it does
+## How it works
 
-- **Guided sessions** — Day A (Swings + Turkish Get-Ups + Floor Pullovers), Day B
-  (Clean & Press + Squats + ATG Split Squats), and Active Recovery, each bookended by the
-  ATG-integrated warm-up (tibialis raises, elephant walks) and cool-down (seated good
-  mornings) sequences.
-- **Built-in timers** — EMOM timers with beeps at the top of every minute (and a 3-2-1
-  countdown into each one), a guided interval timer for warm-up/cool-down, a self-paced
-  rung tracker with rest clock for Clean & Press reverse ladders, and a sets tracker for
-  the ATG movements.
-- **Hit / missed inputs** — after each movement you record whether you hit the rep/time
-  goal with perfect form.
-- **Automatic progression** — hit a goal and the target advances (time → density →
-  complexity for the Wildman lifts; reps and elevation→depth→load for the ATG armor);
-  miss and it holds. The TGU and ATG Split Squat advance after two consecutive hits
-  (≈ one week at two sessions per week).
-- **History** — every saved workout is logged with the exact target attempted and the bell
-  weight used.
-- **Progress chart** — total output (reps × bell weight) per workout and as a cumulative
-  running total, filterable by movement, with a table view. Set your bell's weight (kg or
-  lb) in Settings; it's recorded with each save, so the chart keeps making sense when you
-  move to a heavier bell.
-- **Settings** — set your starting rep counts or correct a target manually; reset everything.
+The app suggests the scheduled workout for the day, but any session can be started at any time:
 
-## Stack
+| Day | Default session |
+| --- | --- |
+| Monday & Thursday | **Day A** — Swings, Turkish Get-Ups, Floor Pullovers |
+| Tuesday & Friday | **Day B** — Clean & Press, Squats, ATG Split Squats |
+| Wednesday | **Active Recovery** — warm-up and cool-down only |
+| Saturday & Sunday | Rest |
 
-- [TanStack Start](https://tanstack.com/start) in SPA mode (fully static build)
-- [TanStack Router](https://tanstack.com/router) file-based routes
-- [TanStack Store](https://tanstack.com/store) + localStorage persistence
-- Tailwind CSS 4, Vite, Vitest
+Day A and Day B include the same timed warm-up and cool-down. The defaults are a starting plan, not a locked prescription: edit them to suit your training.
+
+## During a session
+
+- Timed warm-up/cool-down movements run as guided sequences, with configurable cue beeps and end-countdown audio.
+- EMOM movements use a minute timer; ladder and sets-and-reps movements use completion trackers. Short transitions can be placed between movements.
+- Record the reps actually completed for each core movement. A goal is marked hit when completed reps meet or exceed its target.
+- An active workout, its current step, results, and timer state persist in the browser, so it can be resumed after navigation or a refresh. Starting another day offers the choice to resume or discard the active workout.
+- Saving records only the core-workout results. Active Recovery saves as a warm-up/cool-down-only entry.
+
+## Plan and progression
+
+The **Plan** page explains the default weekly structure and progression ideas. Progression is manual: after a session, use **Settings** to change the current or next phase when you decide it is appropriate.
+
+For every movement you can edit its variant, coaching cue, kettlebell use and weight, per-side setting, and format:
+
+- timed duration and cue beeps;
+- EMOM reps per minute and duration;
+- reps and sets; or
+- ascending/descending ladders.
+
+Warm-up and cool-down exercises can be swapped, removed, or added, and transitions can be edited. Workout-plan changes are stored locally and can be reset along with history.
+
+## History and progress
+
+Each saved session records its date, target, completed reps, hit/miss status, and the load configured for that exercise at the time of the workout. You can delete individual history entries; doing so does not alter the workout plan.
+
+The **Progress** page charts either a session total or an individual movement, per workout or cumulatively. Weighted output is `completed reps × recorded weight`; bodyweight output is completed reps. Switch the display between kg and lb. Bodyweight and weighted ATG split-squat results are kept separate because they are not directly comparable.
+
+## Data and browser capabilities
+
+All workout plans, history, presentation settings, active-session state, and timer state live in `localStorage` under `workout-tracker:*` keys. Clearing site data resets them. Timers use the Web Audio API and request a screen wake lock while running; start a timer with its button so mobile browsers can enable audio.
 
 ## Development
 
 ```bash
 npm install
 npm run dev     # http://localhost:3000
-npm test        # progression logic tests
+npm test
+npm run tsc
 npm run build   # static output in dist/client
 ```
 
 ## Deploying to GitHub Pages
 
-The repo ships with `.github/workflows/deploy.yml`. One-time setup:
+The included GitHub Actions workflow tests, builds, and deploys every push to `main`.
 
-1. Create a GitHub repository and push this project to its `main` branch.
-2. In the repo, go to **Settings → Pages** and set **Source** to **GitHub Actions**.
+1. Push the project to a GitHub repository on the `main` branch.
+2. In **Settings → Pages**, choose **GitHub Actions** as the source.
 
-Every push to `main` then tests, builds, and deploys automatically. The workflow sets
-`VITE_BASE` to `/<repo-name>/` (or `/` for a `*.github.io` user site) so assets and routes
-resolve, and copies `index.html` to `404.html` so deep links like `/session/a` work on
-Pages' static hosting.
+The workflow configures the correct base path for project or user sites and copies `index.html` to `404.html` so static GitHub Pages can serve direct app routes such as `/session/a`.
 
-## Notes
+## Stack
 
-- Timers use the Web Audio API for beeps and request a screen wake lock while running;
-  tap the Start button (a user gesture) so mobile browsers allow the audio.
-- Data lives in localStorage under `workout-tracker:*` keys — clearing site data resets
-  the program.
+- TanStack Start and TanStack Router (static SPA)
+- React and TanStack Store
+- Vite, Tailwind CSS, and Vitest
