@@ -4,8 +4,11 @@ import { useStore } from '@tanstack/react-store'
 import { MOVEMENTS } from '#/lib/movementData'
 import { DAY_INFO } from '#/lib/plan'
 import { formatTarget } from '#/lib/planText'
+import { countdownCueSeconds, DEFAULT_COUNTDOWN_MIN_SECONDS, DEFAULT_COUNTDOWN_PERCENT } from '#/lib/countdownCue'
+import { presentationSettingsStore, setCountdownCueConfig, workoutFormatPresentationKey } from '#/lib/presentationSettings'
 import { resetAllData, setWorkout, workoutsStore } from '#/lib/store'
-import type { DayId, ExerciseTrainingPlan, TrainingFormat, Workout, WorkoutItem } from '#/lib/types'
+import type { CountdownCueConfig } from '#/lib/countdownCue'
+import type { DayId, Emom, ExerciseTrainingPlan, Timed, TrainingFormat, Workout, WorkoutItem } from '#/lib/types'
 
 export const Route = createFileRoute('/settings')({ component: Settings, ssr: false })
 
@@ -52,17 +55,17 @@ function Settings() {
     <div className="flex overflow-hidden rounded-xl border border-zinc-700">
       {(['a', 'b', 'recovery'] as const).map((id) => <button key={id} type="button" className={`flex-1 px-4 py-2 font-semibold ${day === id ? 'bg-emerald-500 text-zinc-950' : 'text-zinc-400 hover:bg-zinc-800'}`} onClick={() => setDay(id)}>{DAY_INFO[id].title}</button>)}
     </div>
-    {(['warmup', 'coreWorkout', 'cooldown'] as const).map((section) => <SectionEditor key={section} title={sectionTitles[section]} items={workout[section] ?? []} swappable={section !== 'coreWorkout'} onChange={(index, next) => updateSection(section, index, next)} onRemove={(index) => removeItem(section, index)} onAddTransition={() => appendItem(section, { kind: 'transition', seconds: 5 })} onAddExercise={section === 'coreWorkout' ? undefined : () => appendItem(section, { exercise: MOVEMENTS.goodMorning, currentPhase: { kind: 'timed', variant: 'standard', duration: 60, cues: [] } })} />)}
+    {(['warmup', 'coreWorkout', 'cooldown'] as const).map((section) => <SectionEditor key={section} day={day} section={section} title={sectionTitles[section]} items={workout[section] ?? []} swappable={section !== 'coreWorkout'} onChange={(index, next) => updateSection(section, index, next)} onRemove={(index) => removeItem(section, index)} onAddTransition={() => appendItem(section, { kind: 'transition', seconds: 5 })} onAddExercise={section === 'coreWorkout' ? undefined : () => appendItem(section, { exercise: MOVEMENTS.goodMorning, currentPhase: { kind: 'timed', variant: 'standard', duration: 60, cues: [] } })} />)}
     <section className="rounded-2xl border border-rose-900/60 bg-zinc-900 p-4"><p className="font-bold text-rose-400">Danger zone</p><p className="mb-3 text-sm text-zinc-500">Reset workouts and history to defaults.</p><button type="button" className="rounded-lg border border-rose-800 px-4 py-2 text-sm font-semibold text-rose-400 hover:bg-rose-950" onClick={() => { if (window.confirm('Reset all workout settings and history?')) resetAllData() }}>Reset all data</button></section>
   </div>
 }
 
-function SectionEditor({ title, items, swappable, onChange, onRemove, onAddTransition, onAddExercise }: { title: string; items: Array<WorkoutItem>; swappable: boolean; onChange: (index: number, next: WorkoutItem) => void; onRemove: (index: number) => void; onAddTransition: () => void; onAddExercise: (() => void) | undefined }) {
+function SectionEditor({ day, section, title, items, swappable, onChange, onRemove, onAddTransition, onAddExercise }: { day: DayId; section: keyof Workout; title: string; items: Array<WorkoutItem>; swappable: boolean; onChange: (index: number, next: WorkoutItem) => void; onRemove: (index: number) => void; onAddTransition: () => void; onAddExercise: (() => void) | undefined }) {
   return <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
     <p className="font-bold text-emerald-400">{title}</p>
     {items.length === 0 && <p className="mt-2 text-sm text-zinc-500">No items.</p>}
     {items.map((item, index) => <div key={'currentPhase' in item ? `${item.exercise.id}-${index}` : `transition-${index}`} className="relative pr-16">{'currentPhase' in item
-      ? <ExercisePlanEditor plan={item} swappable={swappable} onChange={(next) => onChange(index, next)} />
+      ? <ExercisePlanEditor day={day} section={section} plan={item} swappable={swappable} onChange={(next) => onChange(index, next)} />
       : <TransitionEditor seconds={item.seconds} onChange={(seconds) => onChange(index, { kind: 'transition', seconds })} />}<button type="button" className="absolute right-0 top-4 text-xs text-rose-400" onClick={() => onRemove(index)}>Remove</button></div>)}
     <div className="mt-3 flex gap-2"><button type="button" className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm font-semibold hover:bg-zinc-800" onClick={onAddTransition}>Add transition</button>{onAddExercise && <button type="button" className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm font-semibold hover:bg-zinc-800" onClick={onAddExercise}>Add exercise</button>}</div>
   </section>
@@ -72,17 +75,28 @@ function TransitionEditor({ seconds, onChange }: { seconds: number; onChange: (s
   return <div className="border-b border-zinc-800 py-3 last:border-b-0"><label className="flex items-center gap-2 text-sm text-zinc-400">Transition <input type="number" min={0} max={300} className={numberInput} value={seconds} onChange={(event) => onChange(Math.min(300, positive(event.target.valueAsNumber, 0)))} /> seconds</label></div>
 }
 
-function ExercisePlanEditor({ plan, swappable, onChange }: { plan: ExerciseTrainingPlan<TrainingFormat>; swappable: boolean; onChange: (next: ExerciseTrainingPlan<TrainingFormat>) => void }) {
+function ExercisePlanEditor({ day, section, plan, swappable, onChange }: { day: DayId; section: keyof Workout; plan: ExerciseTrainingPlan<TrainingFormat>; swappable: boolean; onChange: (next: ExerciseTrainingPlan<TrainingFormat>) => void }) {
   const { exercise, currentPhase } = plan
+  const presentationSettings = useStore(presentationSettingsStore)
   const replacePhase = (next: TrainingFormat) => onChange({ ...plan, currentPhase: next })
+  const countdownDecorator = (phase: TrainingFormat, slot: 'current' | 'next') => {
+    if (phase.kind !== 'timed' && phase.kind !== 'emom') return undefined
+    const key = workoutFormatPresentationKey(day, section, exercise.id, slot, phase.kind)
+    return { config: presentationSettings[key] ?? {}, onChange: (config: CountdownCueConfig) => setCountdownCueConfig(key, config) }
+  }
+  const currentCountdown = countdownDecorator(currentPhase, 'current')
+  const nextCountdown = plan.nextPhase ? countdownDecorator(plan.nextPhase, 'next') : undefined
   return <div className="border-b border-zinc-800 py-4 last:border-b-0">
-    {swappable ? <div className="flex flex-wrap items-center gap-3"><MovementSelect value={exercise.id} onChange={(id) => { const movement = Object.values(MOVEMENTS).find((candidate) => candidate.id === id); if (movement) onChange({ ...plan, exercise: movement }) }} /><FormatSelect value={currentPhase.kind} onChange={(kind) => replacePhase(defaultPhase(kind, currentPhase))} /></div> : <p className="font-bold">{exercise.name}</p>}
+    <div className="flex flex-wrap items-center gap-3">
+      {swappable ? <MovementSelect value={exercise.id} onChange={(id) => { const movement = Object.values(MOVEMENTS).find((candidate) => candidate.id === id); if (movement) onChange({ ...plan, exercise: movement }) }} /> : <p className="font-bold">{exercise.name}</p>}
+      <FormatSelect value={currentPhase.kind} onChange={(kind) => replacePhase(defaultPhase(kind, currentPhase))} />
+    </div>
     <p className="mb-3 mt-1 text-sm text-zinc-500">{formatTarget(exercise.name, currentPhase)}</p>
-    <PhaseEditor phase={currentPhase} suggestions={exercise.variantOptions} onChange={replacePhase} />
+    <PhaseEditor phase={currentPhase} suggestions={exercise.variantOptions} countdownConfig={currentCountdown?.config} onCountdownConfigChange={currentCountdown?.onChange} onChange={replacePhase} />
     <details className="mt-4 rounded-lg border border-zinc-800 p-3">
       <summary className="cursor-pointer text-sm font-semibold text-zinc-300">Edit next phase</summary>
       <div className="mt-3">
-        {plan.nextPhase ? <><div className="mb-3 flex flex-wrap items-center gap-3"><FormatSelect value={plan.nextPhase.kind} onChange={(kind) => onChange({ ...plan, nextPhase: defaultPhase(kind, plan.nextPhase!) })} /><button type="button" className="text-sm text-rose-400" onClick={() => { const { nextPhase: _removed, ...rest } = plan; onChange(rest) }}>Clear next phase</button></div><PhaseEditor phase={plan.nextPhase} suggestions={exercise.variantOptions} onChange={(nextPhase) => onChange({ ...plan, nextPhase })} /></> : <button type="button" className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm font-semibold hover:bg-zinc-800" onClick={() => onChange({ ...plan, nextPhase: { ...currentPhase, equipment: currentPhase.equipment ? { ...currentPhase.equipment } : undefined } })}>Add next phase</button>}
+        {plan.nextPhase ? <><div className="mb-3 flex flex-wrap items-center gap-3"><FormatSelect value={plan.nextPhase.kind} onChange={(kind) => onChange({ ...plan, nextPhase: defaultPhase(kind, plan.nextPhase!) })} /><button type="button" className="text-sm text-rose-400" onClick={() => { const { nextPhase: _removed, ...rest } = plan; onChange(rest) }}>Clear next phase</button></div><PhaseEditor phase={plan.nextPhase} suggestions={exercise.variantOptions} countdownConfig={nextCountdown?.config} onCountdownConfigChange={nextCountdown?.onChange} onChange={(nextPhase) => onChange({ ...plan, nextPhase })} /></> : <button type="button" className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm font-semibold hover:bg-zinc-800" onClick={() => onChange({ ...plan, nextPhase: { ...currentPhase, equipment: currentPhase.equipment ? { ...currentPhase.equipment } : undefined } })}>Add next phase</button>}
       </div>
     </details>
   </div>
@@ -101,7 +115,7 @@ function VariantInput({ value, suggestions, onChange }: { value: string; suggest
   return <label className="flex items-center gap-2 text-sm">Variant <input className={textInput} value={value} list={suggestions ? listId : undefined} onChange={(event) => onChange(event.target.value)} />{suggestions && <datalist id={listId}>{suggestions.map((variant) => <option key={variant} value={variant} />)}</datalist>}</label>
 }
 
-function PhaseEditor({ phase, suggestions, onChange }: { phase: TrainingFormat; suggestions: readonly string[] | undefined; onChange: (next: TrainingFormat) => void }) {
+function PhaseEditor({ phase, suggestions, countdownConfig, onCountdownConfigChange, onChange }: { phase: TrainingFormat; suggestions: readonly string[] | undefined; countdownConfig?: CountdownCueConfig; onCountdownConfigChange?: (config: CountdownCueConfig) => void; onChange: (next: TrainingFormat) => void }) {
   return <div className="space-y-3">
     <div className="flex flex-wrap gap-4"><VariantInput value={phase.variant} suggestions={suggestions} onChange={(variant) => onChange({ ...phase, variant })} /><label className="flex min-w-72 flex-1 items-center gap-2 text-sm">Cue <input className={`${textInput} flex-1`} value={phase.cue ?? ''} onChange={(event) => onChange({ ...phase, cue: event.target.value || undefined })} /></label></div>
     <EquipmentFields phase={phase} onChange={onChange} />
@@ -110,13 +124,26 @@ function PhaseEditor({ phase, suggestions, onChange }: { phase: TrainingFormat; 
       {phase.kind === 'repsAndSets' && <><NumberField label="Reps" value={phase.reps} onChange={(reps) => onChange({ ...phase, reps })} /><NumberField label="Sets" value={phase.sets} onChange={(sets) => onChange({ ...phase, sets })} /></>}
       {phase.kind === 'ladder' && <><NumberField label="Ladder top" value={phase.ladderTop} onChange={(ladderTop) => onChange({ ...phase, ladderTop })} /><NumberField label="Ladders" value={phase.ladders} onChange={(ladders) => onChange({ ...phase, ladders })} /><label className="flex items-center gap-2 text-sm">Direction <select className={selectInput} value={phase.direction} onChange={(event) => onChange({ ...phase, direction: event.target.value as 'up' | 'down' })}><option value="down">Down</option><option value="up">Up</option></select></label></>}
       {phase.kind === 'timed' && <><NumberField label="Seconds" value={phase.duration} onChange={(duration) => onChange({ ...phase, duration })} /><label className="flex items-center gap-2 text-sm">Cue beeps <input className={textInput} placeholder="e.g. 30, 60" value={phase.cues.join(', ')} onChange={(event) => onChange({ ...phase, cues: event.target.value.split(',').map(Number).filter((value) => Number.isFinite(value) && value > 0) })} /></label></>}
+      {(phase.kind === 'timed' || phase.kind === 'emom') && countdownConfig && onCountdownConfigChange && <CountdownCueFields phase={phase} config={countdownConfig} onChange={onCountdownConfigChange} />}
       <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!phase.perSide} onChange={(event) => onChange({ ...phase, perSide: event.target.checked || undefined })} /> Per side</label>
     </div>
   </div>
 }
 
-function NumberField({ label, value, onChange }: { label: string; value: number; onChange: (value: number) => void }) {
-  return <label className="flex items-center gap-2 text-sm">{label}<input type="number" min={1} className={numberInput} value={value} onChange={(event) => onChange(positive(event.target.valueAsNumber))} /></label>
+function CountdownCueFields({ phase, config, onChange }: { phase: Timed | Emom; config: CountdownCueConfig; onChange: (config: CountdownCueConfig) => void }) {
+  const intervalSeconds = phase.kind === 'emom' ? 60 : phase.duration
+  return <div className="w-full rounded-lg border border-zinc-800 p-3">
+    <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-500">End countdown audio</p>
+    <div className="flex flex-wrap items-center gap-4">
+      <NumberField label="Last %" value={config.countdownPercent ?? DEFAULT_COUNTDOWN_PERCENT} maximum={100} onChange={(countdownPercent) => onChange({ ...config, countdownPercent })} />
+      <NumberField label="Minimum seconds" value={config.countdownMinSeconds ?? DEFAULT_COUNTDOWN_MIN_SECONDS} onChange={(countdownMinSeconds) => onChange({ ...config, countdownMinSeconds })} />
+      <p className="text-sm text-zinc-500">Ticks for the last {countdownCueSeconds(intervalSeconds, config)} seconds{phase.kind === 'emom' ? ' of each minute' : ''}; a different sound plays at zero.</p>
+    </div>
+  </div>
+}
+
+function NumberField({ label, value, maximum, onChange }: { label: string; value: number; maximum?: number; onChange: (value: number) => void }) {
+  return <label className="flex items-center gap-2 text-sm">{label}<input type="number" min={1} max={maximum} className={numberInput} value={value} onChange={(event) => onChange(Math.min(maximum ?? Number.POSITIVE_INFINITY, positive(event.target.valueAsNumber)))} /></label>
 }
 
 function EquipmentFields({ phase, onChange }: { phase: TrainingFormat; onChange: (next: TrainingFormat) => void }) {

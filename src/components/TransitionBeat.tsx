@@ -2,8 +2,8 @@ import { useEffect, useRef } from 'react'
 import { finishBeep, tick, unlockAudio } from '#/lib/audio'
 import { formatClock, useStopwatch } from '#/lib/useStopwatch'
 
-export function TransitionBeat({ seconds, nextName, onDone }: { seconds: number; nextName: string; onDone: () => void }) {
-  const { status, elapsedMs, start, finish } = useStopwatch()
+export function TransitionBeat({ seconds, nextName, persistenceKey, onDone }: { seconds: number; nextName: string; persistenceKey?: string; onDone: () => void }) {
+  const { status, elapsedMs, start, finish } = useStopwatch(persistenceKey)
   const done = useRef(false)
   const lastSecond = useRef(-1)
   const remaining = Math.max(0, Math.ceil(seconds - elapsedMs / 1000))

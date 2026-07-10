@@ -29,6 +29,12 @@ export function tick(): void {
   tone(880, 90)
 }
 
+/** A timed movement reached zero — lower double tone, distinct from countdown ticks. */
+export function zeroBeep(): void {
+  tone(520, 180)
+  tone(520, 180, 220)
+}
+
 /** Top of a new EMOM minute / next warm-up segment */
 export function minuteBeep(): void {
   tone(1200, 160)

@@ -1,11 +1,14 @@
 import { Store } from '@tanstack/store'
 import { DEFAULT_WORKOUTS } from './movementData'
 import { formatTarget, targetReps } from './planText'
+import { resetPresentationSettings } from './presentationSettings'
 import type { DayId, Emom, Ladder, RepsAndSets, Workout, WorkoutLogEntry, WorkoutSettingsState } from './types'
 
 const WORKOUTS_KEY = 'workout-tracker:workouts:v1'
 const HISTORY_KEY = 'workout-tracker:history:v1'
 const SETTINGS_KEY = 'workout-tracker:settings:v1'
+const ACTIVE_SESSION_KEY = 'workout-tracker:active-session:v1'
+const SESSION_RUNTIME_PREFIX = 'workout-tracker:session-runtime:v1:'
 
 export const DEFAULT_WORKOUT_SETTINGS: WorkoutSettingsState = { displayUnit: 'kg' }
 
@@ -73,6 +76,26 @@ function isSettings(value: unknown): value is WorkoutSettingsState {
   return unit === 'kg' || unit === 'lb'
 }
 
+export interface ActiveSessionState {
+  id: string
+  day: DayId
+  workout: Workout
+  stepIdx: number
+  results: Record<string, LoggedResult>
+  timerDone: Record<number, boolean>
+}
+
+function isActiveSession(value: unknown): value is ActiveSessionState | null {
+  if (value === null) return true
+  return isRecord(value)
+    && typeof value.id === 'string'
+    && (value.day === 'a' || value.day === 'b' || value.day === 'recovery')
+    && isWorkout(value.workout)
+    && typeof value.stepIdx === 'number'
+    && isRecord(value.results)
+    && isRecord(value.timerDone)
+}
+
 export const workoutsStore = new Store<Record<DayId, Workout>>(
   load(WORKOUTS_KEY, DEFAULT_WORKOUTS, isWorkouts),
 )
@@ -82,11 +105,51 @@ export const historyStore = new Store<Array<WorkoutLogEntry>>(
 export const settingsStore = new Store<WorkoutSettingsState>(
   load(SETTINGS_KEY, DEFAULT_WORKOUT_SETTINGS, isSettings),
 )
+export const activeSessionStore = new Store<ActiveSessionState | null>(
+  load(ACTIVE_SESSION_KEY, null, isActiveSession),
+)
 
 if (typeof window !== 'undefined') {
   workoutsStore.subscribe(() => window.localStorage.setItem(WORKOUTS_KEY, JSON.stringify(workoutsStore.state)))
   historyStore.subscribe(() => window.localStorage.setItem(HISTORY_KEY, JSON.stringify(historyStore.state)))
   settingsStore.subscribe(() => window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settingsStore.state)))
+  activeSessionStore.subscribe(() => window.localStorage.setItem(ACTIVE_SESSION_KEY, JSON.stringify(activeSessionStore.state)))
+}
+
+export function workoutRuntimeKey(sessionId: string, stepIdx: number, name: string): string {
+  return `${SESSION_RUNTIME_PREFIX}${sessionId}:${stepIdx}:${name}`
+}
+
+function clearSessionRuntime(sessionId: string): void {
+  if (typeof window === 'undefined') return
+  const prefix = `${SESSION_RUNTIME_PREFIX}${sessionId}:`
+  for (let index = window.localStorage.length - 1; index >= 0; index -= 1) {
+    const key = window.localStorage.key(index)
+    if (key?.startsWith(prefix)) window.localStorage.removeItem(key)
+  }
+}
+
+export function startSession(day: DayId, workout: Workout): void {
+  const previous = activeSessionStore.state
+  if (previous) clearSessionRuntime(previous.id)
+  activeSessionStore.setState(() => ({
+    id: crypto.randomUUID(),
+    day,
+    workout,
+    stepIdx: 0,
+    results: {},
+    timerDone: {},
+  }))
+}
+
+export function updateActiveSession(update: (session: ActiveSessionState) => ActiveSessionState): void {
+  activeSessionStore.setState((session) => session ? update(session) : session)
+}
+
+export function clearActiveSession(): void {
+  const session = activeSessionStore.state
+  if (session) clearSessionRuntime(session.id)
+  activeSessionStore.setState(() => null)
 }
 
 export function setWorkout(day: DayId, workout: Workout): void {
@@ -130,6 +193,8 @@ export function deleteWorkout(id: string): void {
 }
 
 export function resetAllData(): void {
+  clearActiveSession()
+  resetPresentationSettings()
   workoutsStore.setState(() => DEFAULT_WORKOUTS)
   historyStore.setState(() => [])
 }

@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { finishBeep, minuteBeep, switchBeep, tick, unlockAudio } from '#/lib/audio'
+import { finishBeep, minuteBeep, switchBeep, tick, unlockAudio, zeroBeep } from '#/lib/audio'
+import { countdownCueSeconds } from '#/lib/countdownCue'
 import { buildItemPhases, buildSegmentSwitchPoints, phaseAtElapsedSeconds } from '#/lib/segmentPhases'
 import { formatClock, useStopwatch, useWakeLock } from '#/lib/useStopwatch'
 import type { Timed, WorkoutItem } from '#/lib/types'
+import type { CountdownCueConfig } from '#/lib/countdownCue'
 
-const COUNTDOWN_SECONDS = 5
+const TRANSITION_COUNTDOWN_SECONDS = 5
 
-export function TimedRun({ items, onDone }: { items: Array<WorkoutItem>; onDone: () => void }) {
-  const { status, elapsedMs, start, pause, resume, seek, finish } = useStopwatch()
+export function TimedRun({ items, persistenceKey, countdownConfigFor, onDone }: { items: Array<WorkoutItem>; persistenceKey?: string; countdownConfigFor?: (exerciseId: string) => CountdownCueConfig; onDone: () => void }) {
+  const { status, elapsedMs, start, pause, resume, seek, finish } = useStopwatch(persistenceKey)
   useWakeLock(status === 'running')
   const phases = useMemo(() => buildItemPhases(items), [items])
   const totalSeconds = phases.reduce((sum, phase) => sum + phase.seconds, 0)
@@ -27,11 +29,19 @@ export function TimedRun({ items, onDone }: { items: Array<WorkoutItem>; onDone:
   const nextPlan = currentPhase.kind === 'work'
     ? items.slice(currentPhase.itemIndex + 1).find((item) => 'currentPhase' in item)
     : undefined
+  const phaseEnd = currentPhase.startsAt + currentPhase.seconds
+  const phaseSwitches = switchPoints.filter((point) => point > currentPhase.startsAt && point < phaseEnd)
+  const boundary = Math.min(phaseEnd, ...phaseSwitches.filter((point) => point > elapsedSec))
+  const segmentStart = Math.max(currentPhase.startsAt, ...phaseSwitches.filter((point) => point <= elapsedSec))
+  const countdownSeconds = currentPhase.kind === 'work' && currentPlan
+    ? countdownCueSeconds(boundary - segmentStart, countdownConfigFor?.(currentPlan.exercise.id) ?? {})
+    : Math.min(TRANSITION_COUNTDOWN_SECONDS, currentPhase.seconds)
 
   const lastIndex = useRef(-1)
   const firedSwitches = useRef(new Set<number>())
   const lastTick = useRef('')
   const done = useRef(false)
+  const previousPhase = useRef(currentPhase)
 
   useEffect(() => {
     if (status !== 'running') return
@@ -44,6 +54,10 @@ export function TimedRun({ items, onDone }: { items: Array<WorkoutItem>; onDone:
       }
       return
     }
+    if (previousPhase.current !== currentPhase) {
+      if (previousPhase.current.kind === 'work') zeroBeep()
+      previousPhase.current = currentPhase
+    }
     if (currentPhase.kind === 'work' && currentPhase.itemIndex !== lastIndex.current) {
       lastIndex.current = currentPhase.itemIndex
       minuteBeep()
@@ -55,18 +69,15 @@ export function TimedRun({ items, onDone }: { items: Array<WorkoutItem>; onDone:
         switchBeep()
       }
     }
-    const boundary = currentPhase.kind === 'transition'
-      ? currentPhase.startsAt + currentPhase.seconds
-      : Math.min(...switchPoints.filter((point) => point > now && point < currentPhase.startsAt + currentPhase.seconds), Number.POSITIVE_INFINITY)
     const remaining = Math.ceil(boundary - now)
-    if (remaining <= COUNTDOWN_SECONDS && remaining >= 1) {
+    if (remaining <= countdownSeconds && remaining >= 1) {
       const key = `${boundary}:${remaining}`
       if (key !== lastTick.current) {
         lastTick.current = key
         tick()
       }
     }
-  }, [currentPhase, elapsedMs, finish, onDone, status, switchPoints, totalSeconds])
+  }, [boundary, countdownSeconds, currentPhase, elapsedMs, finish, onDone, status, switchPoints, totalSeconds])
 
   const endEarly = () => {
     if (done.current) return

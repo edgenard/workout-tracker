@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { HeadContent, Link, Scripts, createRootRoute, useRouter } from '@tanstack/react-router'
 import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
 import { TanStackDevtools } from '@tanstack/react-devtools'
+import { useStore } from '@tanstack/react-store'
+import { activeSessionStore } from '#/lib/store'
 
 import appCss from '../styles.css?url'
 
@@ -32,6 +34,7 @@ const NAV_ITEMS: Array<{ to: string; label: string }> = [
 
 function Nav() {
   const router = useRouter()
+  const activeSession = useStore(activeSessionStore)
   // The prerendered SPA shell must carry no active state: hydration adopts the
   // shell's DOM attributes as-is, so anything baked in at prerender time (when
   // the location is '/') would stick. Start with no active link, then set it
@@ -56,6 +59,11 @@ function Nav() {
       <Link to="/" className="mr-auto text-lg font-black tracking-tight">
         🏋️ Kettlebell<span className="text-emerald-400">Tracker</span>
       </Link>
+      {activeSession && <Link
+        to="/session/$day"
+        params={{ day: activeSession.day }}
+        className={`rounded-lg px-3 py-1.5 font-semibold ${rel?.startsWith('/session') ? 'bg-emerald-500 text-zinc-950' : 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25'}`}
+      >Active Workout</Link>}
       {NAV_ITEMS.map(({ to, label }) => {
         const active = rel !== null && (to === '/' ? rel === '/' : rel.startsWith(to))
         return (

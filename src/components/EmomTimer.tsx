@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react'
 import { finishBeep, minuteBeep, tick, unlockAudio } from '#/lib/audio'
+import { countdownCueSeconds } from '#/lib/countdownCue'
 import { formatClock, useStopwatch, useWakeLock } from '#/lib/useStopwatch'
+import type { CountdownCueConfig } from '#/lib/countdownCue'
 
 interface EmomTimerProps {
   totalMinutes: number
@@ -8,6 +10,8 @@ interface EmomTimerProps {
   repsText: string
   /** Optional per-minute label, e.g. Left/Right for alternating TGU */
   minuteLabel?: (minuteIndex: number) => string
+  persistenceKey?: string
+  countdownConfig?: CountdownCueConfig
   /** Called with elapsed ms (total on natural finish, elapsed-so-far on early end) */
   onDone: (completedMs: number) => void
 }
@@ -16,10 +20,12 @@ export function EmomTimer({
   totalMinutes,
   repsText,
   minuteLabel,
+  persistenceKey,
+  countdownConfig = {},
   onDone,
 }: EmomTimerProps) {
-  const countdownSeconds = 5
-  const { status, elapsedMs, start, pause, resume, finish } = useStopwatch()
+  const countdownSeconds = countdownCueSeconds(60, countdownConfig)
+  const { status, elapsedMs, start, pause, resume, finish } = useStopwatch(persistenceKey)
   useWakeLock(status === 'running')
 
   const totalMs = totalMinutes * 60_000
