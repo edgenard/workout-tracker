@@ -1,126 +1,135 @@
 import { Store } from '@tanstack/store'
-import { DEFAULT_PROGRESSION } from './progression'
-import type {
-  BellState,
-  MovementId,
-  ProgressionState,
-  WorkoutLogEntry,
-  WorkoutSettingsState,
-} from './types'
-import {
-  applyResults,
-  movementReps,
-  movementTarget,
-  movementUsesBell,
-} from './progression'
+import { DEFAULT_WORKOUTS } from './movementData'
+import { formatTarget, targetReps } from './planText'
+import type { DayId, Emom, Ladder, RepsAndSets, Workout, WorkoutLogEntry, WorkoutSettingsState } from './types'
 
-const PROGRESSION_KEY = 'workout-tracker:progression:v1'
+const WORKOUTS_KEY = 'workout-tracker:workouts:v1'
 const HISTORY_KEY = 'workout-tracker:history:v1'
-const BELL_KEY = 'workout-tracker:bell:v1'
 const SETTINGS_KEY = 'workout-tracker:settings:v1'
 
-export const DEFAULT_BELL: BellState = { weight: 16, unit: 'kg' }
-export const DEFAULT_WORKOUT_SETTINGS: WorkoutSettingsState = {
-  transitionSeconds: 5,
-  countdownSeconds: 5,
-}
+export const DEFAULT_WORKOUT_SETTINGS: WorkoutSettingsState = { displayUnit: 'kg' }
 
-function load<T>(key: string, fallback: T): T {
+function load<T>(key: string, fallback: T, valid: (value: unknown) => value is T): T {
   if (typeof window === 'undefined') return fallback
   try {
     const raw = window.localStorage.getItem(key)
     if (!raw) return fallback
-    return { ...fallback, ...JSON.parse(raw) }
+    const value: unknown = JSON.parse(raw)
+    return valid(value) ? value : fallback
   } catch {
     return fallback
   }
 }
 
-function loadHistory(): Array<WorkoutLogEntry> {
-  if (typeof window === 'undefined') return []
-  try {
-    const raw = window.localStorage.getItem(HISTORY_KEY)
-    return raw ? (JSON.parse(raw) as Array<WorkoutLogEntry>) : []
-  } catch {
-    return []
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object'
+}
+
+function isPhase(value: unknown): boolean {
+  if (!isRecord(value) || typeof value.variant !== 'string' || typeof value.kind !== 'string') return false
+  switch (value.kind) {
+    case 'timed': return typeof value.duration === 'number' && Array.isArray(value.cues)
+    case 'emom': return typeof value.duration === 'number' && typeof value.targetReps === 'number'
+    case 'repsAndSets': return typeof value.reps === 'number' && typeof value.sets === 'number'
+    case 'ladder': return typeof value.ladderTop === 'number' && typeof value.ladders === 'number' && (value.direction === 'up' || value.direction === 'down')
+    default: return false
   }
 }
 
-export const progressionStore = new Store<ProgressionState>(
-  load(PROGRESSION_KEY, DEFAULT_PROGRESSION),
+function isItem(value: unknown): boolean {
+  if (!isRecord(value)) return false
+  if (value.kind === 'transition') return typeof value.seconds === 'number'
+  return isRecord(value.exercise)
+    && typeof value.exercise.id === 'string'
+    && typeof value.exercise.name === 'string'
+    && typeof value.exercise.description === 'string'
+    && isPhase(value.currentPhase)
+    && (value.nextPhase === undefined || isPhase(value.nextPhase))
+}
+
+function isItems(value: unknown): value is Workout['coreWorkout'] {
+  return Array.isArray(value) && value.every(isItem)
+}
+
+function isWorkout(value: unknown): value is Workout {
+  if (!isRecord(value) || !isItems(value.coreWorkout)) return false
+  return (value.warmup === undefined || isItems(value.warmup))
+    && (value.cooldown === undefined || isItems(value.cooldown))
+}
+
+function isWorkouts(value: unknown): value is Record<DayId, Workout> {
+  if (!value || typeof value !== 'object') return false
+  const workouts = value as Record<string, unknown>
+  return isWorkout(workouts.a) && isWorkout(workouts.b) && isWorkout(workouts.recovery)
+}
+
+function isHistory(value: unknown): value is Array<WorkoutLogEntry> {
+  return Array.isArray(value)
+}
+
+function isSettings(value: unknown): value is WorkoutSettingsState {
+  if (!value || typeof value !== 'object') return false
+  const unit = (value as { displayUnit?: unknown }).displayUnit
+  return unit === 'kg' || unit === 'lb'
+}
+
+export const workoutsStore = new Store<Record<DayId, Workout>>(
+  load(WORKOUTS_KEY, DEFAULT_WORKOUTS, isWorkouts),
 )
-
-export const historyStore = new Store<Array<WorkoutLogEntry>>(loadHistory())
-
-export const bellStore = new Store<BellState>(load(BELL_KEY, DEFAULT_BELL))
-
+export const historyStore = new Store<Array<WorkoutLogEntry>>(
+  load(HISTORY_KEY, [], isHistory),
+)
 export const settingsStore = new Store<WorkoutSettingsState>(
-  load(SETTINGS_KEY, DEFAULT_WORKOUT_SETTINGS),
+  load(SETTINGS_KEY, DEFAULT_WORKOUT_SETTINGS, isSettings),
 )
 
 if (typeof window !== 'undefined') {
-  progressionStore.subscribe(() => {
-    window.localStorage.setItem(PROGRESSION_KEY, JSON.stringify(progressionStore.state))
-  })
-  historyStore.subscribe(() => {
-    window.localStorage.setItem(HISTORY_KEY, JSON.stringify(historyStore.state))
-  })
-  bellStore.subscribe(() => {
-    window.localStorage.setItem(BELL_KEY, JSON.stringify(bellStore.state))
-  })
-  settingsStore.subscribe(() => {
-    window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settingsStore.state))
-  })
+  workoutsStore.subscribe(() => window.localStorage.setItem(WORKOUTS_KEY, JSON.stringify(workoutsStore.state)))
+  historyStore.subscribe(() => window.localStorage.setItem(HISTORY_KEY, JSON.stringify(historyStore.state)))
+  settingsStore.subscribe(() => window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settingsStore.state)))
 }
 
-export function setBell(next: BellState): void {
-  bellStore.setState(() => next)
+export function setWorkout(day: DayId, workout: Workout): void {
+  workoutsStore.setState((workouts) => ({ ...workouts, [day]: workout }))
 }
 
 export function setWorkoutSettings(next: WorkoutSettingsState): void {
   settingsStore.setState(() => next)
 }
 
-export function saveWorkout(
-  day: WorkoutLogEntry['day'],
-  results: Partial<Record<MovementId, number>>,
-): void {
-  const progression = progressionStore.state
-  const hits: Partial<Record<MovementId, boolean>> = {}
+export interface LoggedResult {
+  movementId: string
+  movementName: string
+  phase: Emom | RepsAndSets | Ladder
+  repsDone: number
+}
+
+export function saveWorkout(day: DayId, results: Array<LoggedResult>): void {
   const entry: WorkoutLogEntry = {
     id: crypto.randomUUID(),
     date: new Date().toISOString(),
     day,
-    results: (Object.entries(results) as Array<[MovementId, number]>).map(
-      ([movement, repsDone]) => {
-        const targetReps = movementReps(progression, movement)
-        const hit = repsDone >= targetReps
-        hits[movement] = hit
-        return {
-          movement,
-          target: movementTarget(progression, movement),
-          hit,
-          targetReps,
-          repsDone,
-          weight: movementUsesBell(progression, movement) ? bellStore.state.weight : 0,
-          unit: bellStore.state.unit,
-        }
-      },
-    ),
+    results: results.map((result) => {
+      const goal = targetReps(result.phase)
+      return {
+        movement: result.movementId,
+        target: formatTarget(result.movementName, result.phase),
+        hit: result.repsDone >= goal,
+        targetReps: goal,
+        repsDone: result.repsDone,
+        weight: result.phase.equipment?.weight ?? 0,
+        unit: result.phase.equipment?.weightUnit,
+      }
+    }),
   }
-  historyStore.setState((h) => [entry, ...h])
-  progressionStore.setState((p) => applyResults(p, hits))
+  historyStore.setState((history) => [entry, ...history])
 }
 
 export function deleteWorkout(id: string): void {
-  historyStore.setState((h) => h.filter((e) => e.id !== id))
-}
-
-export function setProgression(next: ProgressionState): void {
-  progressionStore.setState(() => next)
+  historyStore.setState((history) => history.filter((entry) => entry.id !== id))
 }
 
 export function resetAllData(): void {
-  progressionStore.setState(() => DEFAULT_PROGRESSION)
+  workoutsStore.setState(() => DEFAULT_WORKOUTS)
   historyStore.setState(() => [])
 }

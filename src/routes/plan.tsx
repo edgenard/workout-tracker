@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { WARMUP_SEGMENTS, cooldownSegments } from '#/lib/plan'
+import { DEFAULT_WORKOUTS } from '#/lib/movementData'
 import { formatClock } from '#/lib/useStopwatch'
+import type { ExerciseTrainingPlan, Timed, WorkoutItem } from '#/lib/types'
 
 export const Route = createFileRoute('/plan')({ component: PlanPage })
 
@@ -70,6 +71,12 @@ const PROGRESSIONS: Array<[string, Array<string>]> = [
 ]
 
 function PlanPage() {
+  const timedPlans = (items: Array<WorkoutItem>) => items.filter(
+    (item): item is ExerciseTrainingPlan<Timed> =>
+      'currentPhase' in item && item.currentPhase.kind === 'timed',
+  )
+  const warmup = timedPlans(DEFAULT_WORKOUTS.a.warmup ?? [])
+  const cooldown = timedPlans(DEFAULT_WORKOUTS.a.cooldown ?? [])
   return (
     <div className="space-y-8">
       <section>
@@ -106,13 +113,13 @@ function PlanPage() {
           <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
             <p className="font-bold text-emerald-400">Warm-up · Prep & Ankle/Hamstring Armor</p>
             <ul className="mt-2 space-y-2 text-sm text-zinc-300">
-              {WARMUP_SEGMENTS.map((s) => (
-                <li key={s.name}>
+              {warmup.map((item) => (
+                <li key={item.exercise.id}>
                   <span className="font-semibold">
-                    {s.name} · {formatClock(s.seconds)}
+                    {item.exercise.name} · {formatClock(item.currentPhase.duration)}
                   </span>
                   <br />
-                  <span className="text-zinc-500">{s.cue}</span>
+                  <span className="text-zinc-500">{item.currentPhase.cue}</span>
                 </li>
               ))}
             </ul>
@@ -120,19 +127,18 @@ function PlanPage() {
           <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
             <p className="font-bold text-emerald-400">Cool-down · Restore & Lower Back Armor</p>
             <ul className="mt-2 space-y-2 text-sm text-zinc-300">
-              {cooldownSegments(false).map((s) => (
-                <li key={s.name}>
+              {cooldown.map((item) => (
+                <li key={item.exercise.id}>
                   <span className="font-semibold">
-                    {s.name} · {formatClock(s.seconds)}
+                    {item.exercise.name} · {formatClock(item.currentPhase.duration)}
                   </span>
                   <br />
-                  <span className="text-zinc-500">{s.cue}</span>
+                  <span className="text-zinc-500">{item.currentPhase.cue}</span>
                 </li>
               ))}
             </ul>
             <p className="mt-2 text-sm text-zinc-500">
-              Once loaded Seated Good Mornings are enabled in Settings, the segment extends to 3
-              sets of 10 with the bell hugged to your chest.
+              Any cool-down exercise can be swapped or changed to another format in Settings.
             </p>
           </div>
         </div>
@@ -153,9 +159,8 @@ function PlanPage() {
           ))}
         </div>
         <p className="mt-3 text-sm text-zinc-500">
-          The tracker applies these rules automatically when you save a workout: hit the goal and
-          the target advances; miss it and it holds. TGU and the ATG Split Squat advance after
-          two consecutive hits (≈ one week at two sessions per week).
+          Use these rules as guidance, then edit the current and next phases in Settings when
+          you decide to progress.
         </p>
       </section>
     </div>

@@ -1,11 +1,11 @@
 import { useMemo, useRef, useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
+import { MOVEMENTS } from '#/lib/movementData'
 import { DAY_INFO } from '#/lib/plan'
-import { MOVEMENT_NAMES } from '#/lib/progression'
-import { bellStore, historyStore } from '#/lib/store'
+import { historyStore, setWorkoutSettings, settingsStore } from '#/lib/store'
 import { convertWeight, entryVolume, formatVolume } from '#/lib/volume'
-import type { MovementId, WorkoutLogEntry } from '#/lib/types'
+import type { WorkoutLogEntry } from '#/lib/types'
 
 export const Route = createFileRoute('/progress')({ component: Progress, ssr: false })
 
@@ -29,20 +29,13 @@ interface Series {
   points: Array<Point>
 }
 
-const BELL_MOVEMENTS: Array<MovementId> = [
-  'swing',
-  'tgu',
-  'pullover',
-  'cleanPress',
-  'squat',
-  'splitSquat',
-]
-
 function Progress() {
   const history = useStore(historyStore)
-  const bell = useStore(bellStore)
-  const [movement, setMovement] = useState<MovementId | 'all'>('all')
+  const settings = useStore(settingsStore)
+  const [movement, setMovement] = useState<string>('all')
   const [view, setView] = useState<'perWorkout' | 'cumulative'>('perWorkout')
+  const movementIds = useMemo(() => [...new Set(history.flatMap((entry) => entry.results.map((result) => result.movement)))], [history])
+  const movementName = (id: string) => Object.values(MOVEMENTS).find((candidate) => candidate.id === id)?.name ?? id
 
   const { series, runningTotals } = useMemo(() => {
     const entries = [...history]
@@ -51,7 +44,7 @@ function Progress() {
 
     const pointFor = (e: WorkoutLogEntry): Point | null => {
       if (movement === 'all') {
-        const v = entryVolume(e, bell.unit)
+        const v = entryVolume(e, settings.displayUnit)
         if (v === null) return null
         return { x: Date.parse(e.date), y: v, hit: e.results.every((r) => r.hit), entry: e }
       }
@@ -62,7 +55,7 @@ function Progress() {
       if (!r) return null
       return {
         x: Date.parse(e.date),
-        y: r.repsDone! * convertWeight(r.weight!, r.unit ?? 'kg', bell.unit),
+        y: r.repsDone! * convertWeight(r.weight!, r.unit ?? 'kg', settings.displayUnit),
         hit: r.hit,
         entry: e,
       }
@@ -103,11 +96,11 @@ function Progress() {
         .filter((s) => s.points.length > 0)
     }
     return { series, runningTotals }
-  }, [history, movement, view, bell.unit])
+  }, [history, movement, view, settings.displayUnit])
 
   const hasData = series.length > 0
   const legacyCount = history.filter(
-    (e) => e.day !== 'recovery' && entryVolume(e, bell.unit) === null,
+    (e) => e.day !== 'recovery' && entryVolume(e, settings.displayUnit) === null,
   ).length
 
   return (
@@ -115,9 +108,7 @@ function Progress() {
       <div>
         <h1 className="text-2xl font-black">Progress</h1>
         <p className="mt-2 text-zinc-400">
-          Total output per workout — reps × bell weight ({bell.weight} {bell.unit} today), summed
-          across the session's kettlebell movements. Movements still at a bodyweight stage count
-          as zero until you load them.
+          Total output per workout — reps × recorded weight. Bodyweight work counts as zero.
         </p>
       </div>
 
@@ -130,15 +121,18 @@ function Progress() {
             id="movement-filter"
             className="rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm font-semibold"
             value={movement}
-            onChange={(e) => setMovement(e.target.value as MovementId | 'all')}
+            onChange={(e) => setMovement(e.target.value)}
           >
             <option value="all">All (session total)</option>
-            {BELL_MOVEMENTS.map((m) => (
+            {movementIds.map((m) => (
               <option key={m} value={m}>
-                {MOVEMENT_NAMES[m]}
+                {movementName(m)}
               </option>
             ))}
           </select>
+        </div>
+        <div className="flex overflow-hidden rounded-lg border border-zinc-700 text-sm font-semibold">
+          {(['kg', 'lb'] as const).map((unit) => <button key={unit} type="button" className={`px-3 py-1.5 ${settings.displayUnit === unit ? 'bg-zinc-100 text-zinc-950' : 'text-zinc-400 hover:bg-zinc-800'}`} onClick={() => setWorkoutSettings({ displayUnit: unit })}>{unit}</button>)}
         </div>
         <div className="flex overflow-hidden rounded-lg border border-zinc-700 text-sm font-semibold">
           {(
@@ -163,7 +157,7 @@ function Progress() {
 
       <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
         {hasData ? (
-          <VolumeChart key={`${movement}:${view}`} series={series} unit={bell.unit} />
+          <VolumeChart key={`${movement}:${view}:${settings.displayUnit}`} series={series} unit={settings.displayUnit} />
         ) : (
           <p className="py-12 text-center text-zinc-500">
             No charted workouts yet. Finish and save a session and it will appear here.
@@ -187,7 +181,7 @@ function Progress() {
                   <th className="px-4 py-2 font-semibold">Date</th>
                   <th className="px-4 py-2 font-semibold">Day</th>
                   <th className="px-4 py-2 text-right font-semibold">
-                    Volume ({bell.unit}·reps)
+                    Volume ({settings.displayUnit}·reps)
                   </th>
                   <th className="px-4 py-2 text-right font-semibold">Running total</th>
                   <th className="px-4 py-2 text-right font-semibold">Goals</th>
@@ -420,7 +414,7 @@ function VolumeChart({ series, unit }: { series: Array<Series>; unit: string }) 
                 .map((r) => (
                   <li key={r.movement} className="flex justify-between gap-2">
                     <span>
-                      {MOVEMENT_NAMES[r.movement]}
+                      {Object.values(MOVEMENTS).find((movement) => movement.id === r.movement)?.name ?? r.movement}
                       {!r.hit && ' (missed)'}
                     </span>
                     <span className="tabular-nums">

@@ -1,68 +1,39 @@
 import { describe, expect, it } from 'vitest'
-import {
-  buildSegmentPhases,
-  buildSegmentSwitchPoints,
-  phaseAtElapsedSeconds,
-} from './segmentPhases'
-import type { TimerSegment } from './types'
+import { buildItemPhases, buildSegmentSwitchPoints, phaseAtElapsedSeconds } from './segmentPhases'
+import type { WorkoutItem } from './types'
 
-const segments: Array<TimerSegment> = [
-  { name: 'First', cue: 'Start here', seconds: 10 },
-  { name: 'Second', cue: 'Keep going', seconds: 20 },
-  { name: 'Third', cue: 'Finish strong', seconds: 30 },
+const movement = { id: 'test', name: 'Test', description: 'Test movement' }
+const items: Array<WorkoutItem> = [
+  { exercise: movement, currentPhase: { kind: 'timed', variant: 'standard', duration: 10, cues: [] } },
+  { kind: 'transition', seconds: 5 },
+  { exercise: movement, currentPhase: { kind: 'timed', variant: 'standard', duration: 20, cues: [8] } },
+  { kind: 'transition', seconds: 7 },
+  { exercise: movement, currentPhase: { kind: 'timed', variant: 'standard', duration: 30, cues: [6, 18] } },
 ]
 
-describe('buildSegmentPhases', () => {
-  it('inserts transitions between adjacent segments', () => {
-    expect(buildSegmentPhases(segments, 5)).toEqual([
-      { kind: 'work', segmentIndex: 0, seconds: 10, startsAt: 0 },
-      { kind: 'transition', nextSegmentIndex: 1, seconds: 5, startsAt: 10 },
-      { kind: 'work', segmentIndex: 1, seconds: 20, startsAt: 15 },
-      { kind: 'transition', nextSegmentIndex: 2, seconds: 5, startsAt: 35 },
-      { kind: 'work', segmentIndex: 2, seconds: 30, startsAt: 40 },
-    ])
-  })
-
-  it('omits a transition after the final segment', () => {
-    const phases = buildSegmentPhases(segments, 5)
-
-    expect(phases.at(-1)).toEqual({ kind: 'work', segmentIndex: 2, seconds: 30, startsAt: 40 })
-  })
-
-  it('treats 0 seconds as no transition', () => {
-    expect(buildSegmentPhases(segments, 0)).toEqual([
-      { kind: 'work', segmentIndex: 0, seconds: 10, startsAt: 0 },
-      { kind: 'work', segmentIndex: 1, seconds: 20, startsAt: 10 },
-      { kind: 'work', segmentIndex: 2, seconds: 30, startsAt: 30 },
+describe('buildItemPhases', () => {
+  it('uses authored work and transition durations', () => {
+    expect(buildItemPhases(items)).toEqual([
+      { kind: 'work', itemIndex: 0, seconds: 10, startsAt: 0 },
+      { kind: 'transition', itemIndex: 1, nextItemIndex: 2, seconds: 5, startsAt: 10 },
+      { kind: 'work', itemIndex: 2, seconds: 20, startsAt: 15 },
+      { kind: 'transition', itemIndex: 3, nextItemIndex: 4, seconds: 7, startsAt: 35 },
+      { kind: 'work', itemIndex: 4, seconds: 30, startsAt: 42 },
     ])
   })
 })
 
 describe('phaseAtElapsedSeconds', () => {
-  it('returns the current phase at elapsed wall-clock seconds', () => {
-    const phases = buildSegmentPhases(segments, 5)
-
-    expect(phaseAtElapsedSeconds(phases, 9)).toEqual(phases[0])
+  it('finds the phase and clamps to the final phase', () => {
+    const phases = buildItemPhases(items)
     expect(phaseAtElapsedSeconds(phases, 10)).toEqual(phases[1])
-    expect(phaseAtElapsedSeconds(phases, 15)).toEqual(phases[2])
-  })
-
-  it('returns the last phase when elapsed time reaches total duration', () => {
-    const phases = buildSegmentPhases(segments, 5)
-
-    expect(phaseAtElapsedSeconds(phases, 70)).toEqual(phases[4])
+    expect(phaseAtElapsedSeconds(phases, 72)).toEqual(phases[4])
   })
 })
 
 describe('buildSegmentSwitchPoints', () => {
-  it('keeps switch cues relative to work phase starts when transitions are inserted', () => {
-    const switchingSegments: Array<TimerSegment> = [
-      { name: 'First', cue: 'Start here', seconds: 10 },
-      { name: 'Second', cue: 'Switch once', seconds: 20, switchTimes: [8] },
-      { name: 'Third', cue: 'Switch twice', seconds: 30, switchTimes: [6, 18] },
-    ]
-    const phases = buildSegmentPhases(switchingSegments, 5)
-
-    expect(buildSegmentSwitchPoints(switchingSegments, phases)).toEqual([23, 46, 58])
+  it('keeps cues relative to work starts', () => {
+    const phases = buildItemPhases(items)
+    expect(buildSegmentSwitchPoints(items, phases)).toEqual([23, 48, 60])
   })
 })

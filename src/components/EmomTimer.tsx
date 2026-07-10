@@ -8,8 +8,6 @@ interface EmomTimerProps {
   repsText: string
   /** Optional per-minute label, e.g. Left/Right for alternating TGU */
   minuteLabel?: (minuteIndex: number) => string
-  /** Seconds before the top of the minute to start the countdown beep */
-  countdownSeconds?: number
   /** Called with elapsed ms (total on natural finish, elapsed-so-far on early end) */
   onDone: (completedMs: number) => void
 }
@@ -18,9 +16,9 @@ export function EmomTimer({
   totalMinutes,
   repsText,
   minuteLabel,
-  countdownSeconds = 5,
   onDone,
 }: EmomTimerProps) {
+  const countdownSeconds = 5
   const { status, elapsedMs, start, pause, resume, finish } = useStopwatch()
   useWakeLock(status === 'running')
 

@@ -1,110 +1,90 @@
-export type MovementId =
-  | 'swing'
-  | 'tgu'
-  | 'pullover'
-  | 'cleanPress'
-  | 'squat'
-  | 'splitSquat'
-
 export type DayId = 'a' | 'b' | 'recovery'
-
-export interface SwingState {
-  /** Phase 3 switches two-hand → single-arm and restarts the cycle */
-  style: 'two-hand' | 'single-arm'
-  repsPerMinute: number
-  minutes: number
-}
-
-export interface TguState {
-  /** Always even — one left + one right per pair of minutes */
-  minutes: number
-  /** Phase 2: strict 3-second pause at every transition */
-  pauses: boolean
-  /** TGU progresses weekly, so we require 2 consecutive hits (≈1 week at 2 A-days) */
-  successStreak: number
-}
-
-export interface CleanPressState {
-  /** Ladder shape: ladderTop..1, e.g. 3 → 3-2-1 */
-  ladderTop: number
-  ladders: number
-}
-
-export interface SquatState {
-  style: 'goblet' | 'front-rack'
-  repsPerMinute: number
-  minutes: number
-}
-
-export interface PulloverState {
-  /** ATG shoulder armor: 3 sets, build from 10 to 15 controlled reps */
-  reps: number
-}
-
-export interface SplitSquatState {
-  /** ATG knee armor: 0 = high elevation … 3 = floor bodyweight, 4 = floor goblet-loaded */
-  level: number
-  /** Depth drops "over weeks" — require 2 consecutive hits to lower the elevation */
-  successStreak: number
-}
-
-export interface GoodMorningState {
-  /** ROM first with bodyweight; hug the bell only once deep hinging is comfortable */
-  loaded: boolean
-}
-
-export interface ProgressionState {
-  swing: SwingState
-  tgu: TguState
-  pullover: PulloverState
-  cleanPress: CleanPressState
-  squat: SquatState
-  splitSquat: SplitSquatState
-  goodMorning: GoodMorningState
-}
-
 export type WeightUnit = 'kg' | 'lb'
 
-export interface BellState {
-  /** The working kettlebell's weight, in the unit below */
+export interface Movement {
+  id: string
+  name: string
+  description: string
+  variantOptions?: Array<string>
+}
+
+export interface Equipment {
+  name: string
+  weightUnit: WeightUnit
   weight: number
-  unit: WeightUnit
+}
+
+export interface BaseTrainingFormat {
+  variant: string
+  cue?: string
+  equipment?: Equipment
+  perSide?: boolean
+}
+
+export interface RepsAndSets extends BaseTrainingFormat {
+  kind: 'repsAndSets'
+  reps: number
+  sets: number
+}
+
+export interface Emom extends BaseTrainingFormat {
+  kind: 'emom'
+  duration: number
+  targetReps: number
+}
+
+export interface Timed extends BaseTrainingFormat {
+  kind: 'timed'
+  duration: number
+  cues: Array<number>
+}
+
+export interface Ladder extends BaseTrainingFormat {
+  kind: 'ladder'
+  ladderTop: number
+  ladders: number
+  direction: 'up' | 'down'
+}
+
+export type TrainingFormat = RepsAndSets | Emom | Timed | Ladder
+
+export interface Transition {
+  kind: 'transition'
+  seconds: number
+}
+
+export interface ExerciseTrainingPlan<TFormat extends TrainingFormat> {
+  exercise: Movement
+  currentPhase: TFormat
+  nextPhase?: TFormat
+  previousPhase?: TFormat
+}
+
+export type WorkoutItem = ExerciseTrainingPlan<TrainingFormat> | Transition
+
+export interface Workout {
+  warmup?: Array<WorkoutItem>
+  coreWorkout: Array<WorkoutItem>
+  cooldown?: Array<WorkoutItem>
 }
 
 export interface WorkoutSettingsState {
-  transitionSeconds: number
-  /** How many seconds before a timer boundary the countdown beep starts */
-  countdownSeconds: number
+  displayUnit: WeightUnit
 }
 
 export interface MovementResult {
-  movement: MovementId
-  /** Human-readable target that was attempted, frozen at log time */
+  movement: string
   target: string
   hit: boolean
-  /** Goal reps for the attempted target, frozen at log time (absent on legacy entries) */
   targetReps?: number
-  /** Reps actually completed (absent on legacy entries) */
   repsDone?: number
-  /** Bell weight used (0 while a movement is still at a bodyweight stage) */
   weight?: number
   unit?: WeightUnit
 }
 
 export interface WorkoutLogEntry {
   id: string
-  /** ISO date-time the workout was saved */
   date: string
   day: DayId
   results: Array<MovementResult>
-}
-
-export interface TimerSegment {
-  name: string
-  cue: string
-  seconds: number
-  /** Seconds into the segment where a switch cue fires (e.g. change sides) */
-  switchTimes?: Array<number>
-  /** What a switch divides the segment into, e.g. "Side" or "Set" */
-  switchLabel?: string
 }

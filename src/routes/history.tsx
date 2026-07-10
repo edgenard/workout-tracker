@@ -1,15 +1,16 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
+import { MOVEMENTS } from '#/lib/movementData'
 import { DAY_INFO } from '#/lib/plan'
-import { MOVEMENT_NAMES } from '#/lib/progression'
-import { bellStore, deleteWorkout, historyStore } from '#/lib/store'
+import { deleteWorkout, historyStore, settingsStore } from '#/lib/store'
 import { entryVolume, formatVolume } from '#/lib/volume'
 
 export const Route = createFileRoute('/history')({ component: History, ssr: false })
 
 function History() {
   const history = useStore(historyStore)
-  const bell = useStore(bellStore)
+  const settings = useStore(settingsStore)
+  const movementName = (id: string) => Object.values(MOVEMENTS).find((movement) => movement.id === id)?.name ?? id
 
   return (
     <div className="space-y-4">
@@ -56,7 +57,7 @@ function History() {
                     <span className={r.hit ? 'text-emerald-400' : 'text-rose-400'}>
                       {r.hit ? '✓' : '✗'}
                     </span>{' '}
-                    <span className="font-semibold">{MOVEMENT_NAMES[r.movement]}:</span> {r.target}
+                    <span className="font-semibold">{movementName(r.movement)}:</span> {r.target}
                     {r.weight !== undefined && (
                       <span className="text-zinc-500">
                         {' '}
@@ -70,14 +71,14 @@ function History() {
                 ))}
               </ul>
               {(() => {
-                const v = entryVolume(entry, bell.unit)
+                const v = entryVolume(entry, settings.displayUnit)
                 return v !== null ? (
                   <p className="mt-2 text-sm text-zinc-500">
                     Total output:{' '}
                     <span className="font-semibold text-zinc-300 tabular-nums">
                       {formatVolume(v)}
                     </span>{' '}
-                    {bell.unit}·reps
+                    {settings.displayUnit}·reps
                   </p>
                 ) : null
               })()}
