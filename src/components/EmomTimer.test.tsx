@@ -11,39 +11,27 @@ vi.mock('#/lib/audio', () => ({
   unlockAudio: vi.fn(),
 }))
 
-const audioInstances: Array<MockAudio> = []
-
-class MockAudio {
-  src: string
-  currentTime = 0
-  duration = 60
-  readyState = 1
-  play = vi.fn(() => Promise.resolve())
-  pause = vi.fn()
-  addEventListener = vi.fn()
-
-  constructor(src: string) {
-    this.src = src
-    audioInstances.push(this)
-  }
-}
+const play = vi.fn(() => Promise.resolve())
+const pause = vi.fn()
 
 beforeEach(() => {
   vi.useFakeTimers()
-  vi.stubGlobal('Audio', MockAudio)
-  audioInstances.length = 0
+  vi.spyOn(HTMLMediaElement.prototype, 'play').mockImplementation(play)
+  vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(pause)
+  play.mockClear()
+  pause.mockClear()
 })
 
 afterEach(() => {
   cleanup()
   window.localStorage.clear()
-  vi.unstubAllGlobals()
+  vi.restoreAllMocks()
   vi.useRealTimers()
 })
 
 describe('EMOM minute audio', () => {
   it('alternates right then left at each minute', () => {
-    render(
+    const { container } = render(
       <EmomTimer
         totalMinutes={3}
         repsText="1 rep"
@@ -53,16 +41,20 @@ describe('EMOM minute audio', () => {
       />,
     )
 
+    const audio = Array.from(container.querySelectorAll('audio'))
+    expect(audio).toHaveLength(2)
+    expect(audio.map((element) => element.getAttribute('src'))).toEqual(['/right.mp3', '/left.mp3'])
+
     fireEvent.click(screen.getByText('Start EMOM'))
-    expect(audioInstances.map((audio) => audio.src)).toEqual(['/right.mp3'])
+    expect(play).toHaveBeenCalledTimes(1)
     expect(screen.getByText(/Minute 1 of 3.*Right/)).toBeTruthy()
 
     act(() => vi.advanceTimersByTime(60_000))
-    expect(audioInstances.map((audio) => audio.src)).toEqual(['/right.mp3', '/left.mp3'])
+    expect(play).toHaveBeenCalledTimes(2)
     expect(screen.getByText(/Minute 2 of 3.*Left/)).toBeTruthy()
 
     act(() => vi.advanceTimersByTime(60_000))
-    expect(audioInstances.map((audio) => audio.src)).toEqual(['/right.mp3', '/left.mp3', '/right.mp3'])
+    expect(play).toHaveBeenCalledTimes(3)
     expect(screen.getByText(/Minute 3 of 3.*Right/)).toBeTruthy()
   })
 })

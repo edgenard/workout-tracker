@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { finishBeep, minuteBeep, tick, unlockAudio } from '#/lib/audio'
 import { countdownCueSeconds } from '#/lib/countdownCue'
 import { formatClock, useStopwatch, useWakeLock } from '#/lib/useStopwatch'
@@ -44,17 +44,20 @@ export function EmomTimer({
   const lastTickSecRef = useRef(-1)
   const doneRef = useRef(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  const audioElementsRef = useRef<Array<HTMLAudioElement | null>>([])
+  const [audioError, setAudioError] = useState(false)
 
   const playMinuteAudio = useCallback((index: number, offsetSeconds: number) => {
-    const source = minuteAudioSources?.[index % minuteAudioSources.length]
-    if (!source) return
+    if (!minuteAudioSources?.length) return
+    const audio = audioElementsRef.current[index % minuteAudioSources.length]
+    if (!audio) return
     audioRef.current?.pause()
-    const audio = new Audio(source)
     audioRef.current = audio
     lastAudioMinuteRef.current = index
     const play = () => {
       if (offsetSeconds > 0) audio.currentTime = Math.min(offsetSeconds, Number.isFinite(audio.duration) ? audio.duration : offsetSeconds)
-      void audio.play().catch(() => {})
+      const playback = audio.play()
+      if (playback) void playback.then(() => setAudioError(false)).catch(() => setAudioError(true))
     }
     if (offsetSeconds > 0 && audio.readyState < 1) audio.addEventListener('loadedmetadata', play, { once: true })
     else play()
@@ -107,34 +110,56 @@ export function EmomTimer({
     onDone(elapsedMs)
   }
 
+  const minuteAudioElements = minuteAudioSources?.map((source, index) => (
+    <audio
+      key={source}
+      ref={(element) => { audioElementsRef.current[index] = element }}
+      src={source}
+      preload="auto"
+      playsInline
+      hidden
+    />
+  ))
+  const audioErrorMessage = audioError && (
+    <div className="text-center text-sm text-amber-400">
+      <p>Audio was blocked by the browser.</p>
+      <button type="button" className="mt-2 rounded-lg border border-amber-700 px-4 py-2 font-semibold hover:bg-amber-950" onClick={() => playMinuteAudio(minuteIdx, secIntoMinute)}>Play exercise audio</button>
+    </div>
+  )
+
   if (status === 'idle') {
     return (
-      <div className="flex flex-col items-center gap-4 py-8">
-        <p className="text-5xl font-black tabular-nums">{totalMinutes}:00</p>
-        <p className="text-zinc-400">
-          {totalMinutes} minutes · beep at the top of every minute
-        </p>
-        <button
-          type="button"
-          className="rounded-xl bg-emerald-500 px-10 py-4 text-xl font-bold text-zinc-950 hover:bg-emerald-400"
-          onClick={() => {
-            unlockAudio()
-            playMinuteAudio(0, 0)
-            start()
-          }}
-        >
-          Start EMOM
-        </button>
-      </div>
+      <>
+        {minuteAudioElements}
+        <div className="flex flex-col items-center gap-4 py-8">
+          <p className="text-5xl font-black tabular-nums">{totalMinutes}:00</p>
+          <p className="text-zinc-400">
+            {totalMinutes} minutes · beep at the top of every minute
+          </p>
+          <button
+            type="button"
+            className="rounded-xl bg-emerald-500 px-10 py-4 text-xl font-bold text-zinc-950 hover:bg-emerald-400"
+            onClick={() => {
+              unlockAudio()
+              playMinuteAudio(0, 0)
+              start()
+            }}
+          >
+            Start EMOM
+          </button>
+        </div>
+      </>
     )
   }
 
   return (
-    <div className="flex flex-col items-center gap-3 py-4">
-      <p className="text-sm font-semibold uppercase tracking-widest text-zinc-400">
-        Minute {minuteIdx + 1} of {totalMinutes}
-        {minuteLabel ? ` — ${minuteLabel(minuteIdx)}` : ''}
-      </p>
+    <>
+      {minuteAudioElements}
+      <div className="flex flex-col items-center gap-3 py-4">
+        <p className="text-sm font-semibold uppercase tracking-widest text-zinc-400">
+          Minute {minuteIdx + 1} of {totalMinutes}
+          {minuteLabel ? ` — ${minuteLabel(minuteIdx)}` : ''}
+        </p>
       <p
         className={`text-7xl font-black tabular-nums ${
           status === 'done'
@@ -146,7 +171,8 @@ export function EmomTimer({
       >
         {status === 'done' ? 'Done' : `0:${String(secRemaining === 60 ? 0 : secRemaining).padStart(2, '0')}`}
       </p>
-      <p className="text-3xl font-bold text-emerald-400">{repsText}</p>
+        <p className="text-3xl font-bold text-emerald-400">{repsText}</p>
+        {audioErrorMessage}
       <div className="h-2 w-full max-w-md overflow-hidden rounded-full bg-zinc-800">
         <div
           className="h-full bg-emerald-500 transition-[width]"
@@ -185,6 +211,7 @@ export function EmomTimer({
           </button>
         </div>
       )}
-    </div>
+      </div>
+    </>
   )
 }
