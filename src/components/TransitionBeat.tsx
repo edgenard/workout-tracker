@@ -2,11 +2,15 @@ import { useEffect, useRef } from 'react'
 import { finishBeep, tick, unlockAudio } from '#/lib/audio'
 import { formatClock, useStopwatch } from '#/lib/useStopwatch'
 
-export function TransitionBeat({ seconds, nextName, persistenceKey, onDone }: { seconds: number; nextName: string; persistenceKey?: string; onDone: () => void }) {
+export function TransitionBeat({ seconds, nextName, persistenceKey, autoStart = false, onDone }: { seconds: number; nextName: string; persistenceKey?: string; autoStart?: boolean; onDone: () => void }) {
   const { status, elapsedMs, start, finish } = useStopwatch(persistenceKey)
   const done = useRef(false)
   const lastSecond = useRef(-1)
   const remaining = Math.max(0, Math.ceil(seconds - elapsedMs / 1000))
+
+  useEffect(() => {
+    if (autoStart && status === 'idle') start()
+  }, [autoStart, start, status])
 
   useEffect(() => {
     if (status !== 'running') return

@@ -11,6 +11,7 @@ interface EmomTimerProps {
   /** Optional per-minute label, e.g. Left/Right for alternating TGU */
   minuteLabel?: (minuteIndex: number) => string
   persistenceKey?: string
+  autoStart?: boolean
   countdownConfig?: CountdownCueConfig
   /** Called with elapsed ms (total on natural finish, elapsed-so-far on early end) */
   onDone: (completedMs: number) => void
@@ -21,6 +22,7 @@ export function EmomTimer({
   repsText,
   minuteLabel,
   persistenceKey,
+  autoStart = false,
   countdownConfig = {},
   onDone,
 }: EmomTimerProps) {
@@ -37,6 +39,10 @@ export function EmomTimer({
   const lastMinuteRef = useRef(0)
   const lastTickSecRef = useRef(-1)
   const doneRef = useRef(false)
+
+  useEffect(() => {
+    if (autoStart && status === 'idle') start()
+  }, [autoStart, start, status])
 
   useEffect(() => {
     if (status !== 'running') return

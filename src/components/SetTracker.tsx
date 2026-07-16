@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { finishBeep, minuteBeep, unlockAudio } from '#/lib/audio'
 import { formatClock, useStopwatch, useWakeLock } from '#/lib/useStopwatch'
 import { usePersistedState } from '#/lib/usePersistedState'
@@ -7,6 +8,7 @@ interface SetTrackerProps {
   /** Big text shown for each set, e.g. "12 reps" or "5 per leg" */
   repsText: string
   persistenceKey?: string
+  autoStart?: boolean
   /** Called with the number of sets actually completed */
   onDone: (completed: number) => void
 }
@@ -15,7 +17,7 @@ interface SetTrackerProps {
  * Self-paced sets × reps tracker: tap each set as you finish it. A rest clock
  * shows time since the last set.
  */
-export function SetTracker({ sets, repsText, persistenceKey, onDone }: SetTrackerProps) {
+export function SetTracker({ sets, repsText, persistenceKey, autoStart = false, onDone }: SetTrackerProps) {
   const { status, elapsedMs, start, finish } = useStopwatch(persistenceKey ? `${persistenceKey}:timer` : undefined)
   useWakeLock(status === 'running')
   const [completed, setCompleted] = usePersistedState(persistenceKey ? `${persistenceKey}:completed` : undefined, 0)
@@ -23,6 +25,10 @@ export function SetTracker({ sets, repsText, persistenceKey, onDone }: SetTracke
 
   const restSec = (elapsedMs - lastSetAtMs) / 1000
   const remaining = sets - completed
+
+  useEffect(() => {
+    if (autoStart && status === 'idle') start()
+  }, [autoStart, start, status])
 
   const completeSet = () => {
     const next = completed + 1

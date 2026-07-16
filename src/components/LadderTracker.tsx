@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { finishBeep, minuteBeep, unlockAudio } from '#/lib/audio'
 import { formatClock, useStopwatch, useWakeLock } from '#/lib/useStopwatch'
 import { usePersistedState } from '#/lib/usePersistedState'
@@ -6,6 +7,7 @@ interface LadderTrackerProps {
   /** Rungs in order, e.g. 3-2-1 × 3 ladders → 9 rungs */
   rungs: Array<{ ladder: number; reps: number }>
   persistenceKey?: string
+  autoStart?: boolean
   /** Called with the number of rungs actually completed */
   onDone: (completed: number) => void
 }
@@ -15,7 +17,7 @@ interface LadderTrackerProps {
  * finish it. A rest clock shows time since the last rung so you can keep
  * rests honest.
  */
-export function LadderTracker({ rungs, persistenceKey, onDone }: LadderTrackerProps) {
+export function LadderTracker({ rungs, persistenceKey, autoStart = false, onDone }: LadderTrackerProps) {
   const { status, elapsedMs, start, finish } = useStopwatch(persistenceKey ? `${persistenceKey}:timer` : undefined)
   useWakeLock(status === 'running')
   const [completed, setCompleted] = usePersistedState(persistenceKey ? `${persistenceKey}:completed` : undefined, 0)
@@ -23,6 +25,10 @@ export function LadderTracker({ rungs, persistenceKey, onDone }: LadderTrackerPr
 
   const restSec = (elapsedMs - lastRungAtMs) / 1000
   const current = rungs[completed]
+
+  useEffect(() => {
+    if (autoStart && status === 'idle') start()
+  }, [autoStart, start, status])
 
   const completeRung = () => {
     const next = completed + 1

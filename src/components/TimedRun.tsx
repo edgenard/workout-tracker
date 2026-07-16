@@ -8,7 +8,7 @@ import type { CountdownCueConfig } from '#/lib/countdownCue'
 
 const TRANSITION_COUNTDOWN_SECONDS = 5
 
-export function TimedRun({ items, persistenceKey, countdownConfigFor, onDone }: { items: Array<WorkoutItem>; persistenceKey?: string; countdownConfigFor?: (exerciseId: string) => CountdownCueConfig; onDone: () => void }) {
+export function TimedRun({ items, persistenceKey, autoStart = false, countdownConfigFor, onDone }: { items: Array<WorkoutItem>; persistenceKey?: string; autoStart?: boolean; countdownConfigFor?: (exerciseId: string) => CountdownCueConfig; onDone: () => void }) {
   const { status, elapsedMs, start, pause, resume, seek, finish } = useStopwatch(persistenceKey)
   useWakeLock(status === 'running')
   const phases = useMemo(() => buildItemPhases(items), [items])
@@ -42,6 +42,10 @@ export function TimedRun({ items, persistenceKey, countdownConfigFor, onDone }: 
   const lastTick = useRef('')
   const done = useRef(false)
   const previousPhase = useRef(currentPhase)
+
+  useEffect(() => {
+    if (autoStart && status === 'idle') start()
+  }, [autoStart, start, status])
 
   useEffect(() => {
     if (status !== 'running') return
