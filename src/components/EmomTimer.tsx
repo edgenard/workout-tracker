@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { finishBeep, minuteBeep, tick, unlockAudio } from '#/lib/audio'
 import { countdownCueSeconds } from '#/lib/countdownCue'
 import { formatClock, useStopwatch, useWakeLock } from '#/lib/useStopwatch'
@@ -10,6 +10,8 @@ interface EmomTimerProps {
   repsText: string
   /** Optional per-minute label, e.g. Left/Right for alternating TGU */
   minuteLabel?: (minuteIndex: number) => string
+  /** Optional audio sources rotated once per minute. */
+  minuteAudioSources?: ReadonlyArray<string>
   persistenceKey?: string
   autoStart?: boolean
   countdownConfig?: CountdownCueConfig
@@ -21,6 +23,7 @@ export function EmomTimer({
   totalMinutes,
   repsText,
   minuteLabel,
+  minuteAudioSources,
   persistenceKey,
   autoStart = false,
   countdownConfig = {},
@@ -37,12 +40,40 @@ export function EmomTimer({
   const secRemaining = 60 - secIntoMinute
 
   const lastMinuteRef = useRef(0)
+  const lastAudioMinuteRef = useRef(-1)
   const lastTickSecRef = useRef(-1)
   const doneRef = useRef(false)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+
+  const playMinuteAudio = useCallback((index: number, offsetSeconds: number) => {
+    const source = minuteAudioSources?.[index % minuteAudioSources.length]
+    if (!source) return
+    audioRef.current?.pause()
+    const audio = new Audio(source)
+    audioRef.current = audio
+    lastAudioMinuteRef.current = index
+    const play = () => {
+      if (offsetSeconds > 0) audio.currentTime = Math.min(offsetSeconds, Number.isFinite(audio.duration) ? audio.duration : offsetSeconds)
+      void audio.play().catch(() => {})
+    }
+    if (offsetSeconds > 0 && audio.readyState < 1) audio.addEventListener('loadedmetadata', play, { once: true })
+    else play()
+  }, [minuteAudioSources])
 
   useEffect(() => {
     if (autoStart && status === 'idle') start()
   }, [autoStart, start, status])
+
+  useEffect(() => {
+    if (status !== 'running' || elapsedMs >= totalMs) {
+      audioRef.current?.pause()
+      return
+    }
+    const currentMinute = Math.floor(elapsedMs / 60_000)
+    if (currentMinute !== lastAudioMinuteRef.current) playMinuteAudio(currentMinute, (elapsedMs % 60_000) / 1000)
+  }, [elapsedMs, playMinuteAudio, status, totalMs])
+
+  useEffect(() => () => audioRef.current?.pause(), [])
 
   useEffect(() => {
     if (status !== 'running') return
@@ -50,6 +81,7 @@ export function EmomTimer({
       if (!doneRef.current) {
         doneRef.current = true
         finishBeep()
+        audioRef.current?.pause()
         finish()
         onDone(totalMs)
       }
@@ -70,6 +102,7 @@ export function EmomTimer({
   const endEarly = () => {
     if (doneRef.current) return
     doneRef.current = true
+    audioRef.current?.pause()
     finish()
     onDone(elapsedMs)
   }
@@ -86,6 +119,7 @@ export function EmomTimer({
           className="rounded-xl bg-emerald-500 px-10 py-4 text-xl font-bold text-zinc-950 hover:bg-emerald-400"
           onClick={() => {
             unlockAudio()
+            playMinuteAudio(0, 0)
             start()
           }}
         >
@@ -134,7 +168,10 @@ export function EmomTimer({
             <button
               type="button"
               className="rounded-lg bg-emerald-500 px-6 py-2 font-semibold text-zinc-950 hover:bg-emerald-400"
-              onClick={resume}
+              onClick={() => {
+                playMinuteAudio(minuteIdx, secIntoMinute)
+                resume()
+              }}
             >
               Resume
             </button>

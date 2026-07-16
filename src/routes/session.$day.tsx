@@ -22,6 +22,7 @@ export const Route = createFileRoute('/session/$day')({ component: SessionPage, 
 
 type SectionLabel = 'Warm-up' | 'Core Workout' | 'Cool-down'
 const sectionIds: Record<SectionLabel, keyof Workout> = { 'Warm-up': 'warmup', 'Core Workout': 'coreWorkout', 'Cool-down': 'cooldown' }
+const TGU_MINUTE_AUDIO = ['/right-hand-turkish-get-up.mp3', '/left-hand-turkish-get-up.mp3'] as const
 
 function sectionChunks(workout: Workout): Array<{ section: SectionLabel; chunk: PlaybackChunk }> {
   const sections: Array<[SectionLabel, Array<WorkoutItem>]> = [
@@ -190,7 +191,7 @@ function SelfPacedStep({ plan, logged, autoStart, transitionSeconds, result, tim
       {currentPhase.cue && <p className="text-sm text-zinc-500">{currentPhase.cue}</p>}
       {nextPhase && <p className="text-sm text-zinc-500">Next: {formatTarget(exercise.name, nextPhase)}</p>}
     </div>
-    {currentPhase.kind === 'emom' && <EmomTimer totalMinutes={currentPhase.duration} repsText={`${currentPhase.targetReps} reps`} persistenceKey={`${persistenceKey}:emom`} autoStart={autoStart} countdownConfig={countdownConfig} onDone={(ms) => record(emomRepsDone(currentPhase, ms))} />}
+    {currentPhase.kind === 'emom' && <EmomTimer totalMinutes={currentPhase.duration} repsText={`${currentPhase.targetReps} reps`} minuteLabel={exercise.id === 'tgu' ? (minute) => minute % 2 === 0 ? 'Right' : 'Left' : undefined} minuteAudioSources={exercise.id === 'tgu' ? TGU_MINUTE_AUDIO : undefined} persistenceKey={`${persistenceKey}:emom`} autoStart={autoStart} countdownConfig={countdownConfig} onDone={(ms) => record(emomRepsDone(currentPhase, ms))} />}
     {currentPhase.kind === 'repsAndSets' && <SetTracker sets={currentPhase.sets} repsText={`${currentPhase.reps} reps${currentPhase.perSide ? ' per side' : ''}`} persistenceKey={`${persistenceKey}:sets`} autoStart={autoStart} onDone={(completed) => record(repsAndSetsRepsDone(currentPhase, completed))} />}
     {currentPhase.kind === 'ladder' && <LadderTracker rungs={ladderRungs(currentPhase)} persistenceKey={`${persistenceKey}:ladder`} autoStart={autoStart} onDone={(completed) => record(ladderRepsDone(currentPhase, completed))} />}
     {logged && (timerDone || result !== undefined ? <RepsCheck targetReps={goal} value={result} onChange={onResult} /> : <p className="pt-2 text-center text-sm text-zinc-500">Finish (or end) the timer to record how many reps you completed.</p>)}
