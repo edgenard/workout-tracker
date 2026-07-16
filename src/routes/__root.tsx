@@ -40,7 +40,9 @@ function Nav() {
   // the location is '/') would stick. Start with no active link, then set it
   // from the real URL after mount and after every completed navigation.
   const [pathname, setPathname] = useState<string | null>(null)
+  const [hydrated, setHydrated] = useState(false)
   useEffect(() => {
+    setHydrated(true)
     setPathname(window.location.pathname)
     return router.subscribe('onResolved', () => setPathname(window.location.pathname))
   }, [router])
@@ -59,7 +61,7 @@ function Nav() {
       <Link to="/" className="mr-auto text-lg font-black tracking-tight">
         🏋️ Kettlebell<span className="text-emerald-400">Tracker</span>
       </Link>
-      {activeSession && <Link
+      {hydrated && activeSession && <Link
         to="/session/$day"
         params={{ day: activeSession.day }}
         className={`rounded-lg px-3 py-1.5 font-semibold ${rel?.startsWith('/session') ? 'bg-emerald-500 text-zinc-950' : 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25'}`}
