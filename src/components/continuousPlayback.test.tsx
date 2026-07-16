@@ -41,4 +41,12 @@ describe('continuous section playback', () => {
     expect(screen.getByText('Start Sets')).toBeTruthy()
     expect(window.localStorage.getItem('sets:timer')).toBeNull()
   })
+
+  it('shows exercise time without a per-set rest timer', async () => {
+    render(<SetTracker sets={3} repsText="10 reps" persistenceKey="sets" autoStart onDone={() => {}} />)
+
+    expect(await screen.findByText('Total: 0:00')).toBeTruthy()
+    expect(screen.queryByText(/rest since last set/i)).toBeNull()
+    expect(window.localStorage.getItem('sets:last-set')).toBeNull()
+  })
 })

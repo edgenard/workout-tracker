@@ -12,6 +12,7 @@ import { chunkWorkoutItems, emomRepsDone, formatTarget, ladderRepsDone, ladderRu
 import { presentationSettingsStore, workoutFormatPresentationKey } from '#/lib/presentationSettings'
 import { activeSessionStore, clearActiveSession, saveWorkout, startSession, updateActiveSession, workoutRuntimeKey, workoutsStore } from '#/lib/store'
 import { usePersistedState } from '#/lib/usePersistedState'
+import { formatClock, useStopwatch } from '#/lib/useStopwatch'
 import type { DayId, Emom, ExerciseTrainingPlan, Ladder, RepsAndSets, Workout, WorkoutItem } from '#/lib/types'
 import type { ActiveSessionState, LoggedResult } from '#/lib/store'
 import type { PlaybackChunk } from '#/lib/planText'
@@ -87,6 +88,9 @@ function ActiveSession({ session }: { session: ActiveSessionState }) {
   const continuesSection = step.kind === 'chunk'
     && previousStep?.kind === 'chunk'
     && previousStep.section === step.section
+  const lastCoreStepIdx = steps.reduce((lastIndex, item, index) => item.kind === 'chunk' && item.section === 'Core Workout' ? index : lastIndex, -1)
+  const inCoreWorkout = step.kind === 'chunk' && step.section === 'Core Workout'
+  const { status: coreTimerStatus, elapsedMs: coreElapsedMs, start: startCoreTimer, finish: finishCoreTimer } = useStopwatch(workoutRuntimeKey(session.id, -1, 'core-workout'))
   const runtimeKey = (name: string) => workoutRuntimeKey(session.id, stepIdx, name)
   const countdownConfig = (section: SectionLabel, exerciseId: string, kind: 'timed' | 'emom'): CountdownCueConfig => presentationSettings[workoutFormatPresentationKey(day, sectionIds[section], exerciseId, 'current', kind)] ?? {}
   const setStepIdx = (next: number | ((index: number) => number)) => updateActiveSession((current) => ({ ...current, stepIdx: typeof next === 'function' ? next(current.stepIdx) : next }))
@@ -110,6 +114,11 @@ function ActiveSession({ session }: { session: ActiveSessionState }) {
     return true
   })()
 
+  useEffect(() => {
+    if (inCoreWorkout && coreTimerStatus === 'idle') startCoreTimer()
+    if (lastCoreStepIdx >= 0 && stepIdx > lastCoreStepIdx && coreTimerStatus === 'running') finishCoreTimer()
+  }, [coreTimerStatus, finishCoreTimer, inCoreWorkout, lastCoreStepIdx, startCoreTimer, stepIdx])
+
   return (
     <div className="space-y-6">
       <header>
@@ -123,6 +132,7 @@ function ActiveSession({ session }: { session: ActiveSessionState }) {
       </header>
 
       <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+        {inCoreWorkout && <p className="mb-4 text-center text-sm font-semibold text-zinc-400 tabular-nums">Core workout: {formatClock(coreElapsedMs / 1000)}</p>}
         {step.kind === 'chunk' && step.chunk.kind === 'timedRun' && <TimedRun key={stepIdx} items={step.chunk.items} persistenceKey={runtimeKey('timed-run')} autoStart={continuesSection} countdownConfigFor={(exerciseId) => countdownConfig(step.section, exerciseId, 'timed')} onDone={completeStep} />}
         {step.kind === 'chunk' && step.chunk.kind === 'selfPaced' && (() => {
           const chunk = step.chunk

@@ -13,17 +13,12 @@ interface SetTrackerProps {
   onDone: (completed: number) => void
 }
 
-/**
- * Self-paced sets × reps tracker: tap each set as you finish it. A rest clock
- * shows time since the last set.
- */
+/** Self-paced sets × reps tracker: tap each set as you finish it. */
 export function SetTracker({ sets, repsText, persistenceKey, autoStart = false, onDone }: SetTrackerProps) {
   const { status, elapsedMs, start, finish } = useStopwatch(persistenceKey ? `${persistenceKey}:timer` : undefined)
   useWakeLock(status === 'running')
   const [completed, setCompleted] = usePersistedState(persistenceKey ? `${persistenceKey}:completed` : undefined, 0)
-  const [lastSetAtMs, setLastSetAtMs] = usePersistedState(persistenceKey ? `${persistenceKey}:last-set` : undefined, 0)
 
-  const restSec = (elapsedMs - lastSetAtMs) / 1000
   const remaining = sets - completed
 
   useEffect(() => {
@@ -33,7 +28,6 @@ export function SetTracker({ sets, repsText, persistenceKey, autoStart = false, 
   const completeSet = () => {
     const next = completed + 1
     setCompleted(next)
-    setLastSetAtMs(elapsedMs)
     if (next >= sets) {
       finishBeep()
       finish()
@@ -47,7 +41,7 @@ export function SetTracker({ sets, repsText, persistenceKey, autoStart = false, 
     return (
       <div className="flex flex-col items-center gap-4 py-8">
         <p className="text-zinc-400">
-          {sets} sets of {repsText} · rest as needed, tap each set as you finish it
+          {sets} sets of {repsText} · tap each set as you finish it
         </p>
         <button
           type="button"
@@ -71,9 +65,6 @@ export function SetTracker({ sets, repsText, persistenceKey, autoStart = false, 
             Set {completed + 1} of {sets}
           </p>
           <p className="text-6xl font-black text-emerald-400">{repsText}</p>
-          <p className="text-zinc-400 tabular-nums">
-            Rest since last set: {formatClock(restSec)}
-          </p>
           <button
             type="button"
             className="rounded-xl bg-emerald-500 px-10 py-4 text-xl font-bold text-zinc-950 hover:bg-emerald-400"
