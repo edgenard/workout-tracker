@@ -22,7 +22,10 @@ export const Route = createFileRoute('/session/$day')({ component: SessionPage, 
 
 type SectionLabel = 'Warm-up' | 'Core Workout' | 'Cool-down'
 const sectionIds: Record<SectionLabel, keyof Workout> = { 'Warm-up': 'warmup', 'Core Workout': 'coreWorkout', 'Cool-down': 'cooldown' }
-const TGU_MINUTE_AUDIO = ['/right-hand-turkish-get-up.mp3', '/left-hand-turkish-get-up.mp3'] as const
+const TGU_MINUTE_AUDIO = [
+  `${import.meta.env.BASE_URL}right-hand-turkish-get-up.mp3`,
+  `${import.meta.env.BASE_URL}left-hand-turkish-get-up.mp3`,
+] as const
 
 function sectionChunks(workout: Workout): Array<{ section: SectionLabel; chunk: PlaybackChunk }> {
   const sections: Array<[SectionLabel, Array<WorkoutItem>]> = [
