@@ -45,7 +45,15 @@ export function EmomTimer({
   const doneRef = useRef(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const audioElementsRef = useRef<Array<HTMLAudioElement | null>>([])
+  const audioWatchdogRef = useRef<number | null>(null)
   const [audioError, setAudioError] = useState(false)
+
+  const clearAudioWatchdog = () => {
+    if (audioWatchdogRef.current !== null) {
+      window.clearTimeout(audioWatchdogRef.current)
+      audioWatchdogRef.current = null
+    }
+  }
 
   const playMinuteAudio = useCallback((index: number, offsetSeconds: number) => {
     if (!minuteAudioSources?.length) return
@@ -56,12 +64,36 @@ export function EmomTimer({
     lastAudioMinuteRef.current = index
     const play = () => {
       if (offsetSeconds > 0) audio.currentTime = Math.min(offsetSeconds, Number.isFinite(audio.duration) ? audio.duration : offsetSeconds)
+      clearAudioWatchdog()
+      // iOS can leave a blocked play() promise pending forever instead of rejecting it,
+      // so fall back to the "blocked" UI ourselves if it hasn't settled shortly.
+      audioWatchdogRef.current = window.setTimeout(() => setAudioError(true), 1200)
       const playback = audio.play()
-      if (playback) void playback.then(() => setAudioError(false)).catch(() => setAudioError(true))
+      if (playback) void playback.then(() => { clearAudioWatchdog(); setAudioError(false) }).catch(() => { clearAudioWatchdog(); setAudioError(true) })
+      else clearAudioWatchdog()
     }
     if (offsetSeconds > 0 && audio.readyState < 1) audio.addEventListener('loadedmetadata', play, { once: true })
     else play()
   }, [minuteAudioSources])
+
+  // Safari only allows programmatic play() on an <audio> element that has itself already
+  // played during a real user gesture. TGU rotates between two separate elements but only
+  // one ever gets tapped directly, so silently "prime" the others whenever we have a genuine
+  // gesture to spend, letting their later timer-driven play() calls succeed.
+  const primeOtherAudioElements = useCallback((activeIndex: number) => {
+    audioElementsRef.current.forEach((audio, index) => {
+      if (!audio || index === activeIndex) return
+      audio.muted = true
+      const reset = () => {
+        audio.pause()
+        audio.currentTime = 0
+        audio.muted = false
+      }
+      const playback = audio.play()
+      if (playback) void playback.then(reset).catch(reset)
+      else reset()
+    })
+  }, [])
 
   useEffect(() => {
     if (autoStart && status === 'idle') start()
@@ -76,7 +108,10 @@ export function EmomTimer({
     if (currentMinute !== lastAudioMinuteRef.current) playMinuteAudio(currentMinute, (elapsedMs % 60_000) / 1000)
   }, [elapsedMs, playMinuteAudio, status, totalMs])
 
-  useEffect(() => () => audioRef.current?.pause(), [])
+  useEffect(() => () => {
+    audioRef.current?.pause()
+    clearAudioWatchdog()
+  }, [])
 
   useEffect(() => {
     if (status !== 'running') return
@@ -123,7 +158,7 @@ export function EmomTimer({
   const audioErrorMessage = audioError && (
     <div className="text-center text-sm text-amber-400">
       <p>Audio was blocked by the browser.</p>
-      <button type="button" className="mt-2 rounded-lg border border-amber-700 px-4 py-2 font-semibold hover:bg-amber-950" onClick={() => playMinuteAudio(minuteIdx, secIntoMinute)}>Play exercise audio</button>
+      <button type="button" className="mt-2 rounded-lg border border-amber-700 px-4 py-2 font-semibold hover:bg-amber-950" onClick={() => { primeOtherAudioElements(minuteIdx); playMinuteAudio(minuteIdx, secIntoMinute) }}>Play exercise audio</button>
     </div>
   )
 
@@ -141,6 +176,7 @@ export function EmomTimer({
             className="rounded-xl bg-emerald-500 px-10 py-4 text-xl font-bold text-zinc-950 hover:bg-emerald-400"
             onClick={() => {
               unlockAudio()
+              primeOtherAudioElements(0)
               playMinuteAudio(0, 0)
               start()
             }}
@@ -195,6 +231,7 @@ export function EmomTimer({
               type="button"
               className="rounded-lg bg-emerald-500 px-6 py-2 font-semibold text-zinc-950 hover:bg-emerald-400"
               onClick={() => {
+                primeOtherAudioElements(minuteIdx)
                 playMinuteAudio(minuteIdx, secIntoMinute)
                 resume()
               }}

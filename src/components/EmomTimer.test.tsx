@@ -46,15 +46,38 @@ describe('EMOM minute audio', () => {
     expect(audio.map((element) => element.getAttribute('src'))).toEqual(['/right.mp3', '/left.mp3'])
 
     fireEvent.click(screen.getByText('Start EMOM'))
-    expect(play).toHaveBeenCalledTimes(1)
+    // 1 real play for the right-hand clip + 1 silent "priming" play on the left-hand
+    // clip so Safari will allow it to autoplay later without its own user gesture.
+    expect(play).toHaveBeenCalledTimes(2)
     expect(screen.getByText(/Minute 1 of 3.*Right/)).toBeTruthy()
 
     act(() => vi.advanceTimersByTime(60_000))
-    expect(play).toHaveBeenCalledTimes(2)
+    expect(play).toHaveBeenCalledTimes(3)
     expect(screen.getByText(/Minute 2 of 3.*Left/)).toBeTruthy()
 
     act(() => vi.advanceTimersByTime(60_000))
-    expect(play).toHaveBeenCalledTimes(3)
+    expect(play).toHaveBeenCalledTimes(4)
     expect(screen.getByText(/Minute 3 of 3.*Right/)).toBeTruthy()
+  })
+
+  it('shows the blocked-audio fallback if play() never settles', () => {
+    // iOS Safari can leave a blocked play() promise pending forever instead of
+    // rejecting it, so the fallback has to rely on a watchdog timeout, not .catch().
+    play.mockImplementation(() => new Promise(() => {}))
+
+    render(
+      <EmomTimer
+        totalMinutes={1}
+        repsText="1 rep"
+        minuteAudioSources={['/right.mp3']}
+        onDone={() => {}}
+      />,
+    )
+
+    fireEvent.click(screen.getByText('Start EMOM'))
+    expect(screen.queryByText(/Audio was blocked/)).toBeNull()
+
+    act(() => vi.advanceTimersByTime(1200))
+    expect(screen.getByText(/Audio was blocked by the browser/)).toBeTruthy()
   })
 })

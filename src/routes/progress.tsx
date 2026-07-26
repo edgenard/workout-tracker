@@ -2,11 +2,11 @@ import { useMemo, useRef, useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { niceTicks } from '#/lib/chartScale'
-import { MOVEMENTS } from '#/lib/movementData'
+import { allMovements, customMovementsStore } from '#/lib/movementData'
 import { DAY_INFO } from '#/lib/plan'
 import { historyStore, setWorkoutSettings, settingsStore } from '#/lib/store'
 import { entryVolume, formatVolume, progressMetricLabel, progressValue } from '#/lib/volume'
-import type { MovementResult, WorkoutLogEntry } from '#/lib/types'
+import type { Movement, MovementResult, WorkoutLogEntry } from '#/lib/types'
 import type { ProgressKind } from '#/lib/volume'
 
 export const Route = createFileRoute('/progress')({
@@ -41,11 +41,11 @@ interface MovementOption {
   kind: ProgressKind
 }
 
-function movementName(id: string): string {
-  return Object.values(MOVEMENTS).find((candidate) => candidate.id === id)?.name ?? id
+function movementName(id: string, movements: Array<Movement>): string {
+  return movements.find((candidate) => candidate.id === id)?.name ?? id
 }
 
-function movementOption(result: MovementResult): MovementOption | null {
+function movementOption(result: MovementResult, movements: Array<Movement>): MovementOption | null {
   const progress = progressValue(result, 'kg')
   if (!progress) return null
   const suffix =
@@ -56,7 +56,7 @@ function movementOption(result: MovementResult): MovementOption | null {
       : ''
   return {
     key: progress.key,
-    label: `${movementName(result.movement)}${suffix}`,
+    label: `${movementName(result.movement, movements)}${suffix}`,
     kind: progress.kind,
   }
 }
@@ -64,16 +64,18 @@ function movementOption(result: MovementResult): MovementOption | null {
 function Progress() {
   const history = useStore(historyStore)
   const settings = useStore(settingsStore)
+  const customMovements = useStore(customMovementsStore)
+  const movements = useMemo(() => allMovements(customMovements), [customMovements])
   const [movement, setMovement] = useState<string>('all')
   const [view, setView] = useState<'perWorkout' | 'cumulative'>('perWorkout')
   const movementOptions = useMemo(() => {
     const options = new Map<string, MovementOption>()
     for (const result of history.flatMap((entry) => entry.results)) {
-      const option = movementOption(result)
+      const option = movementOption(result, movements)
       if (option) options.set(option.key, option)
     }
     return [...options.values()]
-  }, [history])
+  }, [history, movements])
   const selectedOption = movementOptions.find((option) => option.key === movement)
   const metricLabel =
     movement === 'all'
@@ -222,6 +224,7 @@ function Progress() {
             series={series}
             displayUnit={settings.displayUnit}
             metricLabel={metricLabel}
+            movements={movements}
           />
         ) : (
           <p className="py-12 text-center text-zinc-500">
@@ -298,10 +301,12 @@ function VolumeChart({
   series,
   displayUnit,
   metricLabel,
+  movements,
 }: {
   series: Array<Series>
   displayUnit: 'kg' | 'lb'
   metricLabel: string
+  movements: Array<Movement>
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const [hover, setHover] = useState<{ point: Point; series: Series } | null>(null)
@@ -500,7 +505,7 @@ function VolumeChart({
                 .map(({ result, progress }) => (
                   <li key={progress.key} className="flex justify-between gap-2">
                     <span>
-                      {movementName(result.movement)}
+                      {movementName(result.movement, movements)}
                       {!result.hit && ' (missed)'}
                     </span>
                     <span className="tabular-nums">

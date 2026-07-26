@@ -1,14 +1,14 @@
 import { useId, useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { MOVEMENTS } from '#/lib/movementData'
+import { addCustomMovement, allMovements, customMovementsStore } from '#/lib/movementData'
 import { DAY_INFO } from '#/lib/plan'
 import { formatTarget } from '#/lib/planText'
 import { countdownCueSeconds, DEFAULT_COUNTDOWN_MIN_SECONDS, DEFAULT_COUNTDOWN_PERCENT } from '#/lib/countdownCue'
 import { presentationSettingsStore, setCountdownCueConfig, workoutFormatPresentationKey } from '#/lib/presentationSettings'
 import { resetAllData, setWorkout, workoutsStore } from '#/lib/store'
 import type { CountdownCueConfig } from '#/lib/countdownCue'
-import type { DayId, Emom, ExerciseTrainingPlan, Timed, TrainingFormat, Workout, WorkoutItem } from '#/lib/types'
+import type { DayId, Emom, ExerciseTrainingPlan, Movement, Timed, TrainingFormat, Workout, WorkoutItem } from '#/lib/types'
 
 export const Route = createFileRoute('/settings')({ component: Settings, ssr: false })
 
@@ -20,6 +20,8 @@ const sectionTitles: Record<keyof Workout, string> = { warmup: 'Warm-up', coreWo
 function positive(value: number, minimum = 1): number {
   return Math.max(minimum, Math.round(value || minimum))
 }
+
+const BLANK_PHASE: TrainingFormat = { kind: 'timed', variant: 'standard', duration: 60, cues: [] }
 
 function baseFrom(phase: TrainingFormat) {
   return { variant: phase.variant, cue: phase.cue, equipment: phase.equipment, perSide: phase.perSide }
@@ -37,6 +39,8 @@ function defaultPhase(kind: TrainingFormat['kind'], previous: TrainingFormat): T
 
 function Settings() {
   const workouts = useStore(workoutsStore)
+  const customMovements = useStore(customMovementsStore)
+  const movements = allMovements(customMovements)
   const [day, setDay] = useState<DayId>('a')
   const workout = workouts[day]
   const updateSection = (section: keyof Workout, index: number, next: WorkoutItem) => {
@@ -55,27 +59,47 @@ function Settings() {
     <div className="flex overflow-hidden rounded-xl border border-zinc-700">
       {(['a', 'b', 'recovery'] as const).map((id) => <button key={id} type="button" className={`flex-1 px-4 py-2 font-semibold ${day === id ? 'bg-emerald-500 text-zinc-950' : 'text-zinc-400 hover:bg-zinc-800'}`} onClick={() => setDay(id)}>{DAY_INFO[id].title}</button>)}
     </div>
-    {(['warmup', 'coreWorkout', 'cooldown'] as const).map((section) => <SectionEditor key={section} day={day} section={section} title={sectionTitles[section]} items={workout[section] ?? []} swappable={section !== 'coreWorkout'} onChange={(index, next) => updateSection(section, index, next)} onRemove={(index) => removeItem(section, index)} onAddTransition={() => appendItem(section, { kind: 'transition', seconds: 5 })} onAddExercise={section === 'coreWorkout' ? undefined : () => appendItem(section, { exercise: MOVEMENTS.goodMorning, currentPhase: { kind: 'timed', variant: 'standard', duration: 60, cues: [] } })} />)}
+    {(['warmup', 'coreWorkout', 'cooldown'] as const).map((section) => <SectionEditor key={section} day={day} section={section} title={sectionTitles[section]} items={workout[section] ?? []} swappable={section !== 'coreWorkout'} movements={movements} onChange={(index, next) => updateSection(section, index, next)} onRemove={(index) => removeItem(section, index)} onAddTransition={() => appendItem(section, { kind: 'transition', seconds: 5 })} onAddExercise={section === 'coreWorkout' ? undefined : (item) => appendItem(section, item)} />)}
     <section className="rounded-2xl border border-rose-900/60 bg-zinc-900 p-4"><p className="font-bold text-rose-400">Danger zone</p><p className="mb-3 text-sm text-zinc-500">Reset workouts and history to defaults.</p><button type="button" className="rounded-lg border border-rose-800 px-4 py-2 text-sm font-semibold text-rose-400 hover:bg-rose-950" onClick={() => { if (window.confirm('Reset all workout settings and history?')) resetAllData() }}>Reset all data</button></section>
   </div>
 }
 
-function SectionEditor({ day, section, title, items, swappable, onChange, onRemove, onAddTransition, onAddExercise }: { day: DayId; section: keyof Workout; title: string; items: Array<WorkoutItem>; swappable: boolean; onChange: (index: number, next: WorkoutItem) => void; onRemove: (index: number) => void; onAddTransition: () => void; onAddExercise: (() => void) | undefined }) {
+function SectionEditor({ day, section, title, items, swappable, movements, onChange, onRemove, onAddTransition, onAddExercise }: { day: DayId; section: keyof Workout; title: string; items: Array<WorkoutItem>; swappable: boolean; movements: Array<Movement>; onChange: (index: number, next: WorkoutItem) => void; onRemove: (index: number) => void; onAddTransition: () => void; onAddExercise: ((item: WorkoutItem) => void) | undefined }) {
   return <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
     <p className="font-bold text-emerald-400">{title}</p>
     {items.length === 0 && <p className="mt-2 text-sm text-zinc-500">No items.</p>}
     {items.map((item, index) => <div key={'currentPhase' in item ? `${item.exercise.id}-${index}` : `transition-${index}`} className="relative pr-16">{'currentPhase' in item
-      ? <ExercisePlanEditor day={day} section={section} plan={item} swappable={swappable} onChange={(next) => onChange(index, next)} />
+      ? <ExercisePlanEditor day={day} section={section} plan={item} swappable={swappable} movements={movements} onChange={(next) => onChange(index, next)} />
       : <TransitionEditor seconds={item.seconds} onChange={(seconds) => onChange(index, { kind: 'transition', seconds })} />}<button type="button" className="absolute right-0 top-4 text-xs text-rose-400" onClick={() => onRemove(index)}>Remove</button></div>)}
-    <div className="mt-3 flex gap-2"><button type="button" className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm font-semibold hover:bg-zinc-800" onClick={onAddTransition}>Add transition</button>{onAddExercise && <button type="button" className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm font-semibold hover:bg-zinc-800" onClick={onAddExercise}>Add exercise</button>}</div>
+    <div className="mt-3 flex flex-wrap items-center gap-2"><button type="button" className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm font-semibold hover:bg-zinc-800" onClick={onAddTransition}>Add transition</button>{onAddExercise && <AddExerciseForm movements={movements} onAdd={onAddExercise} />}</div>
   </section>
+}
+
+function AddExerciseForm({ movements, onAdd }: { movements: Array<Movement>; onAdd: (item: WorkoutItem) => void }) {
+  const [name, setName] = useState('')
+  const [kind, setKind] = useState<TrainingFormat['kind']>('timed')
+  const listId = useId()
+  const submit = () => {
+    const trimmed = name.trim()
+    if (!trimmed) return
+    const exercise = addCustomMovement(trimmed)
+    onAdd({ exercise, currentPhase: defaultPhase(kind, BLANK_PHASE) })
+    setName('')
+    setKind('timed')
+  }
+  return <div className="flex flex-wrap items-center gap-2">
+    <label className="flex items-center gap-2 text-sm">Exercise name <input className={textInput} list={listId} placeholder="New or existing exercise" value={name} onChange={(event) => setName(event.target.value)} /></label>
+    <datalist id={listId}>{movements.map((movement) => <option key={movement.id} value={movement.name} />)}</datalist>
+    <FormatSelect value={kind} onChange={setKind} />
+    <button type="button" className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm font-semibold hover:bg-zinc-800" onClick={submit}>Add exercise</button>
+  </div>
 }
 
 function TransitionEditor({ seconds, onChange }: { seconds: number; onChange: (seconds: number) => void }) {
   return <div className="border-b border-zinc-800 py-3 last:border-b-0"><label className="flex items-center gap-2 text-sm text-zinc-400">Transition <input type="number" min={0} max={300} className={numberInput} value={seconds} onChange={(event) => onChange(Math.min(300, positive(event.target.valueAsNumber, 0)))} /> seconds</label></div>
 }
 
-function ExercisePlanEditor({ day, section, plan, swappable, onChange }: { day: DayId; section: keyof Workout; plan: ExerciseTrainingPlan<TrainingFormat>; swappable: boolean; onChange: (next: ExerciseTrainingPlan<TrainingFormat>) => void }) {
+function ExercisePlanEditor({ day, section, plan, swappable, movements, onChange }: { day: DayId; section: keyof Workout; plan: ExerciseTrainingPlan<TrainingFormat>; swappable: boolean; movements: Array<Movement>; onChange: (next: ExerciseTrainingPlan<TrainingFormat>) => void }) {
   const { exercise, currentPhase } = plan
   const presentationSettings = useStore(presentationSettingsStore)
   const replacePhase = (next: TrainingFormat) => onChange({ ...plan, currentPhase: next })
@@ -88,7 +112,7 @@ function ExercisePlanEditor({ day, section, plan, swappable, onChange }: { day: 
   const nextCountdown = plan.nextPhase ? countdownDecorator(plan.nextPhase, 'next') : undefined
   return <div className="border-b border-zinc-800 py-4 last:border-b-0">
     <div className="flex flex-wrap items-center gap-3">
-      {swappable ? <MovementSelect value={exercise.id} onChange={(id) => { const movement = Object.values(MOVEMENTS).find((candidate) => candidate.id === id); if (movement) onChange({ ...plan, exercise: movement }) }} /> : <p className="font-bold">{exercise.name}</p>}
+      {swappable ? <MovementSelect value={exercise.id} movements={movements} onChange={(id) => { const movement = movements.find((candidate) => candidate.id === id); if (movement) onChange({ ...plan, exercise: movement }) }} /> : <p className="font-bold">{exercise.name}</p>}
       <FormatSelect value={currentPhase.kind} onChange={(kind) => replacePhase(defaultPhase(kind, currentPhase))} />
     </div>
     <p className="mb-3 mt-1 text-sm text-zinc-500">{formatTarget(exercise.name, currentPhase)}</p>
@@ -102,8 +126,8 @@ function ExercisePlanEditor({ day, section, plan, swappable, onChange }: { day: 
   </div>
 }
 
-function MovementSelect({ value, onChange }: { value: string; onChange: (id: string) => void }) {
-  return <label className="flex items-center gap-2 text-sm">Exercise <select className={selectInput} value={value} onChange={(event) => onChange(event.target.value)}>{Object.values(MOVEMENTS).map((movement) => <option key={movement.id} value={movement.id}>{movement.name}</option>)}</select></label>
+function MovementSelect({ value, movements, onChange }: { value: string; movements: Array<Movement>; onChange: (id: string) => void }) {
+  return <label className="flex items-center gap-2 text-sm">Exercise <select className={selectInput} value={value} onChange={(event) => onChange(event.target.value)}>{movements.map((movement) => <option key={movement.id} value={movement.id}>{movement.name}</option>)}</select></label>
 }
 
 function FormatSelect({ value, onChange }: { value: TrainingFormat['kind']; onChange: (kind: TrainingFormat['kind']) => void }) {

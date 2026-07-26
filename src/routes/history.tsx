@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { MOVEMENTS } from '#/lib/movementData'
+import { allMovements, customMovementsStore } from '#/lib/movementData'
 import { DAY_INFO } from '#/lib/plan'
 import { deleteWorkout, historyStore, settingsStore } from '#/lib/store'
 import { entryMetricLabel, entryVolume, formatVolume } from '#/lib/volume'
@@ -10,7 +10,9 @@ export const Route = createFileRoute('/history')({ component: History, ssr: fals
 function History() {
   const history = useStore(historyStore)
   const settings = useStore(settingsStore)
-  const movementName = (id: string) => Object.values(MOVEMENTS).find((movement) => movement.id === id)?.name ?? id
+  const customMovements = useStore(customMovementsStore)
+  const movements = allMovements(customMovements)
+  const movementName = (id: string) => movements.find((movement) => movement.id === id)?.name ?? id
 
   return (
     <div className="space-y-4">

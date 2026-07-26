@@ -92,6 +92,7 @@ function ActiveSession({ session }: { session: ActiveSessionState }) {
   const continuesSection = step.kind === 'chunk'
     && previousStep?.kind === 'chunk'
     && previousStep.section === step.section
+    && step.section !== 'Core Workout'
   const lastCoreStepIdx = steps.reduce((lastIndex, item, index) => item.kind === 'chunk' && item.section === 'Core Workout' ? index : lastIndex, -1)
   const inCoreWorkout = step.kind === 'chunk' && step.section === 'Core Workout'
   const { status: coreTimerStatus, elapsedMs: coreElapsedMs, start: startCoreTimer, finish: finishCoreTimer } = useStopwatch(workoutRuntimeKey(session.id, -1, 'core-workout'))

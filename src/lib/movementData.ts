@@ -1,3 +1,4 @@
+import { Store } from '@tanstack/store'
 import type { DayId, Equipment, Movement, Transition, Workout, WorkoutItem } from './types'
 
 export const SPLIT_SQUAT_LEVELS = [
@@ -34,6 +35,54 @@ export const MOVEMENTS = {
 } as const satisfies Record<string, Movement>
 
 export type MovementKey = keyof typeof MOVEMENTS
+
+const CUSTOM_MOVEMENTS_KEY = 'workout-tracker:custom-movements:v1'
+
+function isMovement(value: unknown): value is Movement {
+  if (!value || typeof value !== 'object') return false
+  const candidate = value as Record<string, unknown>
+  return typeof candidate.id === 'string' && typeof candidate.name === 'string' && typeof candidate.description === 'string'
+}
+
+function loadCustomMovements(): Array<Movement> {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = window.localStorage.getItem(CUSTOM_MOVEMENTS_KEY)
+    if (!raw) return []
+    const value: unknown = JSON.parse(raw)
+    return Array.isArray(value) && value.every(isMovement) ? value : []
+  } catch {
+    return []
+  }
+}
+
+export const customMovementsStore = new Store<Array<Movement>>(loadCustomMovements())
+
+if (typeof window !== 'undefined') {
+  customMovementsStore.subscribe(() => window.localStorage.setItem(CUSTOM_MOVEMENTS_KEY, JSON.stringify(customMovementsStore.state)))
+}
+
+function slugify(name: string): string {
+  return name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'exercise'
+}
+
+export function allMovements(customMovements: Array<Movement> = customMovementsStore.state): Array<Movement> {
+  return [...Object.values(MOVEMENTS), ...customMovements]
+}
+
+/** Reuses an existing movement with a matching name (case-insensitive) instead of creating a duplicate. */
+export function addCustomMovement(name: string): Movement {
+  const trimmed = name.trim()
+  const existing = allMovements().find((movement) => movement.name.toLowerCase() === trimmed.toLowerCase())
+  if (existing) return existing
+  const takenIds = new Set(allMovements().map((movement) => movement.id))
+  const baseId = slugify(trimmed)
+  let id = baseId
+  for (let suffix = 2; takenIds.has(id); suffix += 1) id = `${baseId}-${suffix}`
+  const movement: Movement = { id, name: trimmed, description: '' }
+  customMovementsStore.setState((movements) => [...movements, movement])
+  return movement
+}
 
 const WARMUP: Array<WorkoutItem> = [
   { exercise: MOVEMENTS.wristSpins, currentPhase: { kind: 'timed', variant: 'standard', duration: 60, cues: [], cue: 'On hands and knees, gently circle your shoulders over your wrists.' } },
