@@ -11,9 +11,11 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
+    "test:bombadil": "bombadil browser test http://localhost:3000 --output-path bombadil-results/run-$(date +%Y%m%d-%H%M%S)",
     "tsc": "tsc --noEmit"
   },
   "dependencies": {
+    "@antithesishq/bombadil": "^0.6.1",
     "@tailwindcss/vite": "^4.1.18",
     "@tanstack/react-devtools": "latest",
     "@tanstack/react-router": "latest",
