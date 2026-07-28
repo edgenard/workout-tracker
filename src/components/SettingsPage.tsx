@@ -50,24 +50,40 @@ export function SettingsPage() {
   const appendItem = (section: keyof Workout, item: WorkoutItem) => {
     setWorkout(day, { ...workout, [section]: [...(workout[section] ?? []), item] })
   }
+  const moveItem = (section: keyof Workout, index: number, direction: -1 | 1) => {
+    const items = workout[section] ?? []
+    const target = index + direction
+    if (target < 0 || target >= items.length) return
+    const next = [...items]
+    ;[next[index], next[target]] = [next[target], next[index]]
+    setWorkout(day, { ...workout, [section]: next })
+  }
 
   return <div className="space-y-6">
     <div><h1 className="text-2xl font-black">Workout Settings</h1><p className="mt-2 text-zinc-400">Edit the workout you want to run. Progression is manual; changes save in this browser.</p></div>
     <div className="flex overflow-hidden rounded-xl border border-zinc-700">
       {(['a', 'b', 'recovery'] as const).map((id) => <button key={id} type="button" className={`flex-1 px-4 py-2 font-semibold ${day === id ? 'bg-emerald-500 text-zinc-950' : 'text-zinc-400 hover:bg-zinc-800'}`} onClick={() => setDay(id)}>{DAY_INFO[id].title}</button>)}
     </div>
-    {(['warmup', 'coreWorkout', 'cooldown'] as const).map((section) => <SectionEditor key={section} day={day} section={section} title={sectionTitles[section]} items={workout[section] ?? []} movements={movements} onChange={(index, next) => updateSection(section, index, next)} onRemove={(index) => removeItem(section, index)} onAddTransition={() => appendItem(section, { kind: 'transition', seconds: 5 })} onAddExercise={(item) => appendItem(section, item)} />)}
+    {(['warmup', 'coreWorkout', 'cooldown'] as const).map((section) => <SectionEditor key={section} day={day} section={section} title={sectionTitles[section]} items={workout[section] ?? []} movements={movements} onChange={(index, next) => updateSection(section, index, next)} onRemove={(index) => removeItem(section, index)} onMove={(index, direction) => moveItem(section, index, direction)} onAddTransition={() => appendItem(section, { kind: 'transition', seconds: 5 })} onAddExercise={(item) => appendItem(section, item)} />)}
     <section className="rounded-2xl border border-rose-900/60 bg-zinc-900 p-4"><p className="font-bold text-rose-400">Danger zone</p><p className="mb-3 text-sm text-zinc-500">Reset workouts and history to defaults.</p><button type="button" className="rounded-lg border border-rose-800 px-4 py-2 text-sm font-semibold text-rose-400 hover:bg-rose-950" onClick={() => { if (window.confirm('Reset all workout settings and history?')) resetAllData() }}>Reset all data</button></section>
   </div>
 }
 
-function SectionEditor({ day, section, title, items, movements, onChange, onRemove, onAddTransition, onAddExercise }: { day: DayId; section: keyof Workout; title: string; items: Array<WorkoutItem>; movements: Array<Movement>; onChange: (index: number, next: WorkoutItem) => void; onRemove: (index: number) => void; onAddTransition: () => void; onAddExercise: (item: WorkoutItem) => void }) {
+function SectionEditor({ day, section, title, items, movements, onChange, onRemove, onMove, onAddTransition, onAddExercise }: { day: DayId; section: keyof Workout; title: string; items: Array<WorkoutItem>; movements: Array<Movement>; onChange: (index: number, next: WorkoutItem) => void; onRemove: (index: number) => void; onMove: (index: number, direction: -1 | 1) => void; onAddTransition: () => void; onAddExercise: (item: WorkoutItem) => void }) {
   return <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
     <p className="font-bold text-emerald-400">{title}</p>
     {items.length === 0 && <p className="mt-2 text-sm text-zinc-500">No items.</p>}
     {items.map((item, index) => <div key={'currentPhase' in item ? `${item.exercise.id}-${index}` : `transition-${index}`} className="relative pr-16">{'currentPhase' in item
       ? <ExercisePlanEditor day={day} section={section} plan={item} movements={movements} onChange={(next) => onChange(index, next)} />
-      : <TransitionEditor seconds={item.seconds} onChange={(seconds) => onChange(index, { kind: 'transition', seconds })} />}<button type="button" className="absolute right-0 top-4 text-xs text-rose-400" onClick={() => onRemove(index)}>Remove</button></div>)}
+      : <TransitionEditor seconds={item.seconds} onChange={(seconds) => onChange(index, { kind: 'transition', seconds })} />}
+      <div className="absolute right-0 top-4 flex flex-col items-end gap-1.5">
+        <div className="flex gap-1">
+          <button type="button" className="rounded border border-zinc-700 px-1.5 py-0.5 text-xs text-zinc-400 hover:bg-zinc-800 disabled:pointer-events-none disabled:opacity-30" disabled={index === 0} onClick={() => onMove(index, -1)} aria-label="Move up">▲</button>
+          <button type="button" className="rounded border border-zinc-700 px-1.5 py-0.5 text-xs text-zinc-400 hover:bg-zinc-800 disabled:pointer-events-none disabled:opacity-30" disabled={index === items.length - 1} onClick={() => onMove(index, 1)} aria-label="Move down">▼</button>
+        </div>
+        <button type="button" className="text-xs text-rose-400" onClick={() => onRemove(index)}>Remove</button>
+      </div>
+    </div>)}
     <div className="mt-3 flex flex-wrap items-center gap-2"><button type="button" className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm font-semibold hover:bg-zinc-800" onClick={onAddTransition}>Add transition</button><AddExerciseForm movements={movements} onAdd={onAddExercise} /></div>
   </section>
 }
