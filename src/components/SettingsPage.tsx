@@ -1,4 +1,4 @@
-import { useId, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useStore } from '@tanstack/react-store'
 import { addCustomMovement, allMovements, customMovementsStore } from '#/lib/movementData'
 import { DAY_INFO } from '#/lib/plan'
@@ -88,10 +88,30 @@ function SectionEditor({ day, section, title, items, movements, onChange, onRemo
   </section>
 }
 
+/** Native `<input list>`/`<datalist>` renders as a plain text box with no suggestions on iOS Safari, so suggestions are implemented in JS instead. */
+function Combobox({ value, options, placeholder, onChange, maxSuggestions = 8 }: { value: string; options: Array<string>; placeholder?: string; onChange: (value: string) => void; maxSuggestions?: number }) {
+  const [open, setOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const handlePointerDown = (event: PointerEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) setOpen(false)
+    }
+    document.addEventListener('pointerdown', handlePointerDown)
+    return () => document.removeEventListener('pointerdown', handlePointerDown)
+  }, [])
+  const trimmed = value.trim().toLowerCase()
+  const suggestions = (trimmed ? options.filter((option) => option.toLowerCase().includes(trimmed)) : options).slice(0, maxSuggestions)
+  return <div className="relative" ref={containerRef}>
+    <input className={textInput} placeholder={placeholder} value={value} onFocus={() => setOpen(true)} onChange={(event) => { onChange(event.target.value); setOpen(true) }} />
+    {open && suggestions.length > 0 && <ul className="absolute z-10 mt-1 max-h-48 w-max min-w-full overflow-auto rounded-lg border border-zinc-700 bg-zinc-950 shadow-lg">
+      {suggestions.map((option) => <li key={option}><button type="button" className="block w-full whitespace-nowrap px-3 py-1.5 text-left text-sm hover:bg-zinc-800" onPointerDown={(event) => event.preventDefault()} onClick={() => { onChange(option); setOpen(false) }}>{option}</button></li>)}
+    </ul>}
+  </div>
+}
+
 function AddExerciseForm({ movements, onAdd }: { movements: Array<Movement>; onAdd: (item: WorkoutItem) => void }) {
   const [name, setName] = useState('')
   const [kind, setKind] = useState<TrainingFormat['kind']>('timed')
-  const listId = useId()
   const submit = () => {
     const trimmed = name.trim()
     if (!trimmed) return
@@ -101,8 +121,7 @@ function AddExerciseForm({ movements, onAdd }: { movements: Array<Movement>; onA
     setKind('timed')
   }
   return <div className="flex flex-wrap items-center gap-2">
-    <label className="flex items-center gap-2 text-sm">Exercise name <input className={textInput} list={listId} placeholder="New or existing exercise" value={name} onChange={(event) => setName(event.target.value)} /></label>
-    <datalist id={listId}>{movements.map((movement) => <option key={movement.id} value={movement.name} />)}</datalist>
+    <label className="flex items-center gap-2 text-sm">Exercise name <Combobox value={name} options={movements.map((movement) => movement.name)} placeholder="New or existing exercise" onChange={setName} /></label>
     <FormatSelect value={kind} onChange={setKind} />
     <button type="button" className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm font-semibold hover:bg-zinc-800" onClick={submit}>Add exercise</button>
   </div>
@@ -148,8 +167,8 @@ function FormatSelect({ value, onChange }: { value: TrainingFormat['kind']; onCh
 }
 
 function VariantInput({ value, suggestions, onChange }: { value: string; suggestions: readonly string[] | undefined; onChange: (variant: string) => void }) {
-  const listId = useId()
-  return <label className="flex items-center gap-2 text-sm">Variant <input className={textInput} value={value} list={suggestions ? listId : undefined} onChange={(event) => onChange(event.target.value)} />{suggestions && <datalist id={listId}>{suggestions.map((variant) => <option key={variant} value={variant} />)}</datalist>}</label>
+  if (!suggestions) return <label className="flex items-center gap-2 text-sm">Variant <input className={textInput} value={value} onChange={(event) => onChange(event.target.value)} /></label>
+  return <label className="flex items-center gap-2 text-sm">Variant <Combobox value={value} options={[...suggestions]} onChange={onChange} /></label>
 }
 
 function PhaseEditor({ phase, suggestions, countdownConfig, onCountdownConfigChange, onChange }: { phase: TrainingFormat; suggestions: readonly string[] | undefined; countdownConfig?: CountdownCueConfig; onCountdownConfigChange?: (config: CountdownCueConfig) => void; onChange: (next: TrainingFormat) => void }) {
