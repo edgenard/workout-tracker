@@ -7,7 +7,7 @@ import { countdownCueSeconds, DEFAULT_COUNTDOWN_MIN_SECONDS, DEFAULT_COUNTDOWN_P
 import { presentationSettingsStore, setCountdownCueConfig, workoutFormatPresentationKey } from '#/lib/presentationSettings'
 import { resetAllData, setWorkout, workoutsStore } from '#/lib/store'
 import type { CountdownCueConfig } from '#/lib/countdownCue'
-import type { DayId, Emom, ExerciseTrainingPlan, Movement, Timed, TrainingFormat, Workout, WorkoutItem } from '#/lib/types'
+import type { DayId, Emom, ExerciseTrainingPlan, Interval, Movement, Timed, TrainingFormat, Workout, WorkoutItem } from '#/lib/types'
 
 
 const numberInput = 'w-20 rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-center font-semibold'
@@ -138,7 +138,7 @@ function ExercisePlanEditor({ day, section, plan, movements, onChange }: { day: 
   const presentationSettings = useStore(presentationSettingsStore)
   const replacePhase = (next: TrainingFormat) => onChange({ ...plan, currentPhase: next })
   const countdownDecorator = (phase: TrainingFormat, slot: 'current' | 'next') => {
-    if (phase.kind !== 'timed' && phase.kind !== 'emom') return undefined
+    if (phase.kind !== 'timed' && phase.kind !== 'emom' && phase.kind !== 'interval') return undefined
     const key = workoutFormatPresentationKey(day, section, exercise.id, slot, phase.kind)
     return { config: presentationSettings[key] ?? {}, onChange: (config: CountdownCueConfig) => setCountdownCueConfig(key, config) }
   }
@@ -183,20 +183,24 @@ function PhaseEditor({ phase, suggestions, countdownConfig, onCountdownConfigCha
       {phase.kind === 'ladder' && <><NumberField label="Ladder top" value={phase.ladderTop} onChange={(ladderTop) => onChange({ ...phase, ladderTop })} /><NumberField label="Ladders" value={phase.ladders} onChange={(ladders) => onChange({ ...phase, ladders })} /><label className="flex items-center gap-2 text-sm">Direction <select className={selectInput} value={phase.direction} onChange={(event) => onChange({ ...phase, direction: event.target.value as 'up' | 'down' })}><option value="down">Down</option><option value="up">Up</option></select></label></>}
       {phase.kind === 'interval' && <><NumberField label="Work sec" value={phase.workSeconds} onChange={(workSeconds) => onChange({ ...phase, workSeconds })} /><NumberField label="Rest sec" value={phase.restSeconds} onChange={(restSeconds) => onChange({ ...phase, restSeconds })} /><NumberField label="Reps" value={phase.reps} onChange={(reps) => onChange({ ...phase, reps })} /></>}
       {phase.kind === 'timed' && <><NumberField label="Seconds" value={phase.duration} onChange={(duration) => onChange({ ...phase, duration })} /><label className="flex items-center gap-2 text-sm">Cue beeps <input className={textInput} placeholder="e.g. 30, 60" value={phase.cues.join(', ')} onChange={(event) => onChange({ ...phase, cues: event.target.value.split(',').map(Number).filter((value) => Number.isFinite(value) && value > 0) })} /></label></>}
-      {(phase.kind === 'timed' || phase.kind === 'emom') && countdownConfig && onCountdownConfigChange && <CountdownCueFields phase={phase} config={countdownConfig} onChange={onCountdownConfigChange} />}
+      {(phase.kind === 'timed' || phase.kind === 'emom' || phase.kind === 'interval') && countdownConfig && onCountdownConfigChange && <CountdownCueFields phase={phase} config={countdownConfig} onChange={onCountdownConfigChange} />}
       <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!phase.perSide} onChange={(event) => onChange({ ...phase, perSide: event.target.checked || undefined })} /> Per side</label>
     </div>
   </div>
 }
 
-function CountdownCueFields({ phase, config, onChange }: { phase: Timed | Emom; config: CountdownCueConfig; onChange: (config: CountdownCueConfig) => void }) {
-  const intervalSeconds = phase.kind === 'emom' ? 60 : phase.duration
+function CountdownCueFields({ phase, config, onChange }: { phase: Timed | Emom | Interval; config: CountdownCueConfig; onChange: (config: CountdownCueConfig) => void }) {
+  const preview = phase.kind === 'emom'
+    ? `${countdownCueSeconds(60, config)} seconds of each minute`
+    : phase.kind === 'interval'
+      ? `${countdownCueSeconds(phase.workSeconds, config)}s of work, ${countdownCueSeconds(phase.restSeconds, config)}s of rest`
+      : `${countdownCueSeconds(phase.duration, config)} seconds`
   return <div className="w-full rounded-lg border border-zinc-800 p-3">
     <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-500">End countdown audio</p>
     <div className="flex flex-wrap items-center gap-4">
       <NumberField label="Last %" value={config.countdownPercent ?? DEFAULT_COUNTDOWN_PERCENT} maximum={100} onChange={(countdownPercent) => onChange({ ...config, countdownPercent })} />
       <NumberField label="Minimum seconds" value={config.countdownMinSeconds ?? DEFAULT_COUNTDOWN_MIN_SECONDS} onChange={(countdownMinSeconds) => onChange({ ...config, countdownMinSeconds })} />
-      <p className="text-sm text-zinc-500">Ticks for the last {countdownCueSeconds(intervalSeconds, config)} seconds{phase.kind === 'emom' ? ' of each minute' : ''}; a different sound plays at zero.</p>
+      <p className="text-sm text-zinc-500">Ticks for the last {preview}; a different sound plays at zero.</p>
     </div>
   </div>
 }

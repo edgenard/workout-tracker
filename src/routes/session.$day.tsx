@@ -11,6 +11,7 @@ import { TransitionBeat } from '#/components/TransitionBeat'
 import { DAY_INFO } from '#/lib/plan'
 import { chunkWorkoutItems, emomRepsDone, formatTarget, ladderRepsDone, ladderRungs, repsAndSetsRepsDone, targetReps } from '#/lib/planText'
 import { presentationSettingsStore, workoutFormatPresentationKey } from '#/lib/presentationSettings'
+import type { CountdownFormatKind } from '#/lib/presentationSettings'
 import { activeSessionStore, clearActiveSession, saveWorkout, startSession, updateActiveSession, workoutRuntimeKey, workoutsStore } from '#/lib/store'
 import { usePersistedState } from '#/lib/usePersistedState'
 import { formatClock, useStopwatch } from '#/lib/useStopwatch'
@@ -98,7 +99,7 @@ function ActiveSession({ session }: { session: ActiveSessionState }) {
   const inCoreWorkout = step.kind === 'chunk' && step.section === 'Core Workout'
   const { status: coreTimerStatus, elapsedMs: coreElapsedMs, start: startCoreTimer, finish: finishCoreTimer } = useStopwatch(workoutRuntimeKey(session.id, -1, 'core-workout'))
   const runtimeKey = (name: string) => workoutRuntimeKey(session.id, stepIdx, name)
-  const countdownConfig = (section: SectionLabel, exerciseId: string, kind: 'timed' | 'emom'): CountdownCueConfig => presentationSettings[workoutFormatPresentationKey(day, sectionIds[section], exerciseId, 'current', kind)] ?? {}
+  const countdownConfig = (section: SectionLabel, exerciseId: string, kind: CountdownFormatKind): CountdownCueConfig => presentationSettings[workoutFormatPresentationKey(day, sectionIds[section], exerciseId, 'current', kind)] ?? {}
   const setStepIdx = (next: number | ((index: number) => number)) => updateActiveSession((current) => ({ ...current, stepIdx: typeof next === 'function' ? next(current.stepIdx) : next }))
   const setResults = (next: Record<string, LoggedResult> | ((results: Record<string, LoggedResult>) => Record<string, LoggedResult>)) => updateActiveSession((current) => ({ ...current, results: typeof next === 'function' ? next(current.results) : next }))
   const completeStep = () => updateActiveSession((current) => ({
@@ -151,7 +152,7 @@ function ActiveSession({ session }: { session: ActiveSessionState }) {
             result={results[chunk.plan.exercise.id]?.repsDone}
             timerDone={!!timerDone[stepIdx]}
             persistenceKey={runtimeKey(chunk.plan.exercise.id)}
-            countdownConfig={chunk.plan.currentPhase.kind === 'emom' ? countdownConfig(step.section, chunk.plan.exercise.id, 'emom') : undefined}
+            countdownConfig={chunk.plan.currentPhase.kind === 'emom' || chunk.plan.currentPhase.kind === 'interval' ? countdownConfig(step.section, chunk.plan.exercise.id, chunk.plan.currentPhase.kind) : undefined}
             onTimerDone={completeStep}
             onResult={(repsDone) => setResults((current) => ({ ...current, [chunk.plan.exercise.id]: { movementId: chunk.plan.exercise.id, movementName: chunk.plan.exercise.name, phase: chunk.plan.currentPhase, repsDone } }))}
           />
@@ -199,7 +200,7 @@ function SelfPacedStep({ plan, logged, autoStart, transitionSeconds, result, tim
     {currentPhase.kind === 'emom' && <EmomTimer totalMinutes={currentPhase.duration} repsText={`${currentPhase.targetReps} reps`} minuteLabel={exercise.id === 'tgu' ? (minute) => minute % 2 === 0 ? 'Right' : 'Left' : undefined} minuteAudioSources={exercise.id === 'tgu' ? TGU_MINUTE_AUDIO : undefined} persistenceKey={`${persistenceKey}:emom`} autoStart={autoStart} countdownConfig={countdownConfig} onDone={(ms) => record(emomRepsDone(currentPhase, ms))} />}
     {currentPhase.kind === 'repsAndSets' && <SetTracker sets={currentPhase.sets} repsText={`${currentPhase.reps} reps${currentPhase.perSide ? ' per side' : ''}`} persistenceKey={`${persistenceKey}:sets`} autoStart={autoStart} onDone={(completed) => record(repsAndSetsRepsDone(currentPhase, completed))} />}
     {currentPhase.kind === 'ladder' && <LadderTracker rungs={ladderRungs(currentPhase)} persistenceKey={`${persistenceKey}:ladder`} autoStart={autoStart} onDone={(completed) => record(ladderRepsDone(currentPhase, completed))} />}
-    {currentPhase.kind === 'interval' && <IntervalTracker workSeconds={currentPhase.workSeconds} restSeconds={currentPhase.restSeconds} reps={currentPhase.reps} persistenceKey={`${persistenceKey}:interval`} autoStart={autoStart} onDone={record} />}
+    {currentPhase.kind === 'interval' && <IntervalTracker workSeconds={currentPhase.workSeconds} restSeconds={currentPhase.restSeconds} reps={currentPhase.reps} persistenceKey={`${persistenceKey}:interval`} autoStart={autoStart} countdownConfig={countdownConfig} onDone={record} />}
     {logged && (timerDone || result !== undefined ? <RepsCheck targetReps={goal} value={result} onChange={onResult} /> : <p className="pt-2 text-center text-sm text-zinc-500">Finish (or end) the timer to record how many reps you completed.</p>)}
   </div>
 }

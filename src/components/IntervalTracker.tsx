@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react'
 import { finishBeep, switchBeep, tick, unlockAudio } from '#/lib/audio'
+import { countdownCueSeconds } from '#/lib/countdownCue'
 import { formatClock, useStopwatch, useWakeLock } from '#/lib/useStopwatch'
+import type { CountdownCueConfig } from '#/lib/countdownCue'
 
 interface IntervalTrackerProps {
   workSeconds: number
@@ -8,15 +10,16 @@ interface IntervalTrackerProps {
   reps: number
   persistenceKey?: string
   autoStart?: boolean
+  countdownConfig?: CountdownCueConfig
   onDone: (repsDone: number) => void
 }
 
-const TICK_SECONDS = 3
-
 /** Work/rest interval timer (e.g. Tabata): counts down work, then rest, on repeat for N reps. */
-export function IntervalTracker({ workSeconds, restSeconds, reps, persistenceKey, autoStart = false, onDone }: IntervalTrackerProps) {
+export function IntervalTracker({ workSeconds, restSeconds, reps, persistenceKey, autoStart = false, countdownConfig = {}, onDone }: IntervalTrackerProps) {
   const { status, elapsedMs, start, pause, resume, finish } = useStopwatch(persistenceKey)
   useWakeLock(status === 'running')
+  const workCountdownSeconds = countdownCueSeconds(workSeconds, countdownConfig)
+  const restCountdownSeconds = countdownCueSeconds(restSeconds, countdownConfig)
 
   const cycleMs = (workSeconds + restSeconds) * 1000
   const totalMs = (reps - 1) * cycleMs + workSeconds * 1000
@@ -51,11 +54,12 @@ export function IntervalTracker({ workSeconds, restSeconds, reps, persistenceKey
       lastTickSecRef.current = -1
     }
     lastPhaseKeyRef.current = phaseKey
-    if (secRemaining >= 0 && secRemaining <= TICK_SECONDS && secRemaining !== lastTickSecRef.current) {
+    const phaseCountdownSeconds = inWork ? workCountdownSeconds : restCountdownSeconds
+    if (secRemaining >= 0 && secRemaining <= phaseCountdownSeconds && secRemaining !== lastTickSecRef.current) {
       lastTickSecRef.current = secRemaining
       tick()
     }
-  }, [clamped, totalMs, roundIdx, inWork, secRemaining, status, finish, onDone, reps])
+  }, [clamped, totalMs, roundIdx, inWork, secRemaining, status, finish, onDone, reps, workCountdownSeconds, restCountdownSeconds])
 
   const endEarly = () => {
     if (doneRef.current) return

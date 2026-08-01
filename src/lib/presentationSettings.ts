@@ -1,10 +1,10 @@
 import { Store } from '@tanstack/store'
 import type { CountdownCueConfig } from './countdownCue'
-import type { DayId, Emom, Timed, Workout } from './types'
+import type { DayId, Emom, Interval, Timed, Workout } from './types'
 
 const PRESENTATION_SETTINGS_KEY = 'workout-tracker:presentation-settings:v1'
 
-export type CountdownFormatKind = Timed['kind'] | Emom['kind']
+export type CountdownFormatKind = Timed['kind'] | Emom['kind'] | Interval['kind']
 export type WorkoutPhaseSlot = 'current' | 'next'
 export type WorkoutPresentationSettings = Record<string, CountdownCueConfig>
 
