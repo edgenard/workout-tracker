@@ -62,6 +62,48 @@ if (typeof window !== 'undefined') {
   customMovementsStore.subscribe(() => window.localStorage.setItem(CUSTOM_MOVEMENTS_KEY, JSON.stringify(customMovementsStore.state)))
 }
 
+const CUSTOM_VARIANTS_KEY = 'workout-tracker:custom-variants:v1'
+
+function isVariantMap(value: unknown): value is Record<string, Array<string>> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  return Object.values(value).every((entry) => Array.isArray(entry) && entry.every((item) => typeof item === 'string'))
+}
+
+function loadCustomVariants(): Record<string, Array<string>> {
+  if (typeof window === 'undefined') return {}
+  try {
+    const raw = window.localStorage.getItem(CUSTOM_VARIANTS_KEY)
+    if (!raw) return {}
+    const value: unknown = JSON.parse(raw)
+    return isVariantMap(value) ? value : {}
+  } catch {
+    return {}
+  }
+}
+
+export const customVariantsStore = new Store<Record<string, Array<string>>>(loadCustomVariants())
+
+if (typeof window !== 'undefined') {
+  customVariantsStore.subscribe(() => window.localStorage.setItem(CUSTOM_VARIANTS_KEY, JSON.stringify(customVariantsStore.state)))
+}
+
+/** Built-in variants for a movement, plus any variants the user has saved for it, deduped case-insensitively. */
+export function variantOptionsFor(movement: Movement, customVariants: Record<string, Array<string>> = customVariantsStore.state): Array<string> {
+  const builtIn = movement.variantOptions ?? []
+  const custom = customVariants[movement.id] ?? []
+  const seen = new Set(builtIn.map((option) => option.toLowerCase()))
+  return [...builtIn, ...custom.filter((option) => !seen.has(option.toLowerCase()))]
+}
+
+/** Saves a new variant name for reuse next time this movement is edited. No-op if it already exists (built-in or custom). */
+export function addCustomVariant(movement: Movement, variant: string): void {
+  const trimmed = variant.trim()
+  if (!trimmed) return
+  const existing = variantOptionsFor(movement)
+  if (existing.some((option) => option.toLowerCase() === trimmed.toLowerCase())) return
+  customVariantsStore.setState((variants) => ({ ...variants, [movement.id]: [...(variants[movement.id] ?? []), trimmed] }))
+}
+
 function slugify(name: string): string {
   return name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'exercise'
 }

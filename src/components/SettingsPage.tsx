@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useStore } from '@tanstack/react-store'
-import { addCustomMovement, allMovements, customMovementsStore } from '#/lib/movementData'
+import { addCustomMovement, addCustomVariant, allMovements, customMovementsStore, customVariantsStore, variantOptionsFor } from '#/lib/movementData'
 import { DAY_INFO } from '#/lib/plan'
 import { formatTarget } from '#/lib/planText'
 import { countdownCueSeconds, DEFAULT_COUNTDOWN_MIN_SECONDS, DEFAULT_COUNTDOWN_PERCENT } from '#/lib/countdownCue'
@@ -90,9 +90,14 @@ function SectionEditor({ day, section, title, items, movements, onChange, onRemo
   </section>
 }
 
-/** Native `<input list>`/`<datalist>` renders as a plain text box with no suggestions on iOS Safari, so suggestions are implemented in JS instead. */
+/**
+ * Native `<input list>`/`<datalist>` renders as a plain text box with no suggestions on iOS Safari, so suggestions are implemented in JS instead.
+ * Filtering runs against what's been typed since the field was focused, not `value` itself — otherwise a pre-filled value (e.g. an
+ * already-selected variant) filters the list down to just itself, hiding every other option the moment the field gains focus.
+ */
 function Combobox({ value, options, placeholder, onChange, maxSuggestions = 8 }: { value: string; options: Array<string>; placeholder?: string; onChange: (value: string) => void; maxSuggestions?: number }) {
   const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
   const containerRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
@@ -101,12 +106,18 @@ function Combobox({ value, options, placeholder, onChange, maxSuggestions = 8 }:
     document.addEventListener('pointerdown', handlePointerDown)
     return () => document.removeEventListener('pointerdown', handlePointerDown)
   }, [])
-  const trimmed = value.trim().toLowerCase()
+  const trimmed = query.trim().toLowerCase()
   const suggestions = (trimmed ? options.filter((option) => option.toLowerCase().includes(trimmed)) : options).slice(0, maxSuggestions)
   return <div className="relative" ref={containerRef}>
-    <input className={textInput} placeholder={placeholder} value={value} onFocus={() => setOpen(true)} onChange={(event) => { onChange(event.target.value); setOpen(true) }} />
+    <input
+      className={textInput}
+      placeholder={placeholder}
+      value={value}
+      onFocus={(event) => { setOpen(true); setQuery(''); event.target.select() }}
+      onChange={(event) => { onChange(event.target.value); setQuery(event.target.value); setOpen(true) }}
+    />
     {open && suggestions.length > 0 && <ul className="absolute z-10 mt-1 max-h-48 w-max min-w-full overflow-auto rounded-lg border border-zinc-700 bg-zinc-950 shadow-lg">
-      {suggestions.map((option) => <li key={option}><button type="button" className="block w-full whitespace-nowrap px-3 py-1.5 text-left text-sm hover:bg-zinc-800" onPointerDown={(event) => event.preventDefault()} onClick={() => { onChange(option); setOpen(false) }}>{option}</button></li>)}
+      {suggestions.map((option) => <li key={option}><button type="button" className="block w-full whitespace-nowrap px-3 py-1.5 text-left text-sm hover:bg-zinc-800" onPointerDown={(event) => event.preventDefault()} onClick={() => { onChange(option); setQuery(option); setOpen(false) }}>{option}</button></li>)}
     </ul>}
   </div>
 }
@@ -136,6 +147,8 @@ function TransitionEditor({ seconds, onChange }: { seconds: number; onChange: (s
 function ExercisePlanEditor({ day, section, plan, movements, onChange }: { day: DayId; section: keyof Workout; plan: ExerciseTrainingPlan<TrainingFormat>; movements: Array<Movement>; onChange: (next: ExerciseTrainingPlan<TrainingFormat>) => void }) {
   const { exercise, currentPhase } = plan
   const presentationSettings = useStore(presentationSettingsStore)
+  const customVariants = useStore(customVariantsStore)
+  const variantSuggestions = variantOptionsFor(exercise, customVariants)
   const replacePhase = (next: TrainingFormat) => onChange({ ...plan, currentPhase: next })
   const countdownDecorator = (phase: TrainingFormat, slot: 'current' | 'next') => {
     if (phase.kind !== 'timed' && phase.kind !== 'emom' && phase.kind !== 'interval') return undefined
@@ -150,11 +163,11 @@ function ExercisePlanEditor({ day, section, plan, movements, onChange }: { day: 
       <FormatSelect value={currentPhase.kind} onChange={(kind) => replacePhase(defaultPhase(kind, currentPhase))} />
     </div>
     <p className="mb-3 mt-1 text-sm text-zinc-500">{formatTarget(exercise.name, currentPhase)}</p>
-    <PhaseEditor phase={currentPhase} suggestions={exercise.variantOptions} countdownConfig={currentCountdown?.config} onCountdownConfigChange={currentCountdown?.onChange} onChange={replacePhase} />
+    <PhaseEditor phase={currentPhase} suggestions={variantSuggestions} onAddVariant={(variant) => addCustomVariant(exercise, variant)} countdownConfig={currentCountdown?.config} onCountdownConfigChange={currentCountdown?.onChange} onChange={replacePhase} />
     <details className="mt-4 rounded-lg border border-zinc-800 p-3">
       <summary className="cursor-pointer text-sm font-semibold text-zinc-300">Edit next phase</summary>
       <div className="mt-3">
-        {plan.nextPhase ? <><div className="mb-3 flex flex-wrap items-center gap-3"><FormatSelect value={plan.nextPhase.kind} onChange={(kind) => onChange({ ...plan, nextPhase: defaultPhase(kind, plan.nextPhase!) })} /><button type="button" className="text-sm text-rose-400" onClick={() => { const { nextPhase: _removed, ...rest } = plan; onChange(rest) }}>Clear next phase</button></div><PhaseEditor phase={plan.nextPhase} suggestions={exercise.variantOptions} countdownConfig={nextCountdown?.config} onCountdownConfigChange={nextCountdown?.onChange} onChange={(nextPhase) => onChange({ ...plan, nextPhase })} /></> : <button type="button" className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm font-semibold hover:bg-zinc-800" onClick={() => onChange({ ...plan, nextPhase: { ...currentPhase, equipment: currentPhase.equipment ? { ...currentPhase.equipment } : undefined } })}>Add next phase</button>}
+        {plan.nextPhase ? <><div className="mb-3 flex flex-wrap items-center gap-3"><FormatSelect value={plan.nextPhase.kind} onChange={(kind) => onChange({ ...plan, nextPhase: defaultPhase(kind, plan.nextPhase!) })} /><button type="button" className="text-sm text-rose-400" onClick={() => { const { nextPhase: _removed, ...rest } = plan; onChange(rest) }}>Clear next phase</button></div><PhaseEditor phase={plan.nextPhase} suggestions={variantSuggestions} onAddVariant={(variant) => addCustomVariant(exercise, variant)} countdownConfig={nextCountdown?.config} onCountdownConfigChange={nextCountdown?.onChange} onChange={(nextPhase) => onChange({ ...plan, nextPhase })} /></> : <button type="button" className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm font-semibold hover:bg-zinc-800" onClick={() => onChange({ ...plan, nextPhase: { ...currentPhase, equipment: currentPhase.equipment ? { ...currentPhase.equipment } : undefined } })}>Add next phase</button>}
       </div>
     </details>
   </div>
@@ -168,14 +181,18 @@ function FormatSelect({ value, onChange }: { value: TrainingFormat['kind']; onCh
   return <label className="flex items-center gap-2 text-sm">Format <select className={selectInput} value={value} onChange={(event) => onChange(event.target.value as TrainingFormat['kind'])}><option value="timed">Timed</option><option value="emom">EMOM</option><option value="repsAndSets">Reps & sets</option><option value="ladder">Ladder</option><option value="interval">Interval</option></select></label>
 }
 
-function VariantInput({ value, suggestions, onChange }: { value: string; suggestions: readonly string[] | undefined; onChange: (variant: string) => void }) {
-  if (!suggestions) return <label className="flex items-center gap-2 text-sm">Variant <input className={textInput} value={value} onChange={(event) => onChange(event.target.value)} /></label>
-  return <label className="flex items-center gap-2 text-sm">Variant <Combobox value={value} options={[...suggestions]} onChange={onChange} /></label>
+function VariantInput({ value, suggestions, onAddVariant, onChange }: { value: string; suggestions: Array<string>; onAddVariant?: (variant: string) => void; onChange: (variant: string) => void }) {
+  const trimmed = value.trim()
+  const alreadySaved = !trimmed || suggestions.some((option) => option.toLowerCase() === trimmed.toLowerCase())
+  return <label className="flex items-center gap-2 text-sm">
+    Variant <Combobox value={value} options={suggestions} onChange={onChange} />
+    {onAddVariant && !alreadySaved && <button type="button" className="text-xs font-semibold text-emerald-400 hover:underline" onClick={() => onAddVariant(trimmed)}>+ Save variant</button>}
+  </label>
 }
 
-function PhaseEditor({ phase, suggestions, countdownConfig, onCountdownConfigChange, onChange }: { phase: TrainingFormat; suggestions: readonly string[] | undefined; countdownConfig?: CountdownCueConfig; onCountdownConfigChange?: (config: CountdownCueConfig) => void; onChange: (next: TrainingFormat) => void }) {
+function PhaseEditor({ phase, suggestions, onAddVariant, countdownConfig, onCountdownConfigChange, onChange }: { phase: TrainingFormat; suggestions: Array<string>; onAddVariant?: (variant: string) => void; countdownConfig?: CountdownCueConfig; onCountdownConfigChange?: (config: CountdownCueConfig) => void; onChange: (next: TrainingFormat) => void }) {
   return <div className="space-y-3">
-    <div className="flex flex-wrap gap-4"><VariantInput value={phase.variant} suggestions={suggestions} onChange={(variant) => onChange({ ...phase, variant })} /><label className="flex min-w-72 flex-1 items-center gap-2 text-sm">Cue <input className={`${textInput} flex-1`} value={phase.cue ?? ''} onChange={(event) => onChange({ ...phase, cue: event.target.value || undefined })} /></label></div>
+    <div className="flex flex-wrap gap-4"><VariantInput value={phase.variant} suggestions={suggestions} onAddVariant={onAddVariant} onChange={(variant) => onChange({ ...phase, variant })} /><label className="flex min-w-72 flex-1 items-center gap-2 text-sm">Cue <input className={`${textInput} flex-1`} value={phase.cue ?? ''} onChange={(event) => onChange({ ...phase, cue: event.target.value || undefined })} /></label></div>
     <EquipmentFields phase={phase} onChange={onChange} />
     <div className="flex flex-wrap items-center gap-4">
       {phase.kind === 'emom' && <><NumberField label="Reps/min" value={phase.targetReps} onChange={(targetReps) => onChange({ ...phase, targetReps })} /><NumberField label="Minutes" value={phase.duration} onChange={(duration) => onChange({ ...phase, duration })} /></>}
