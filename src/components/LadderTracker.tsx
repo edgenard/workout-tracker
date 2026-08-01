@@ -21,9 +21,7 @@ export function LadderTracker({ rungs, persistenceKey, autoStart = false, onDone
   const { status, elapsedMs, start, finish } = useStopwatch(persistenceKey ? `${persistenceKey}:timer` : undefined)
   useWakeLock(status === 'running')
   const [completed, setCompleted] = usePersistedState(persistenceKey ? `${persistenceKey}:completed` : undefined, 0)
-  const [lastRungAtMs, setLastRungAtMs] = usePersistedState(persistenceKey ? `${persistenceKey}:last-rung` : undefined, 0)
 
-  const restSec = (elapsedMs - lastRungAtMs) / 1000
   const current = rungs[completed]
 
   useEffect(() => {
@@ -33,7 +31,6 @@ export function LadderTracker({ rungs, persistenceKey, autoStart = false, onDone
   const completeRung = () => {
     const next = completed + 1
     setCompleted(next)
-    setLastRungAtMs(elapsedMs)
     if (next >= rungs.length) {
       finishBeep()
       finish()
@@ -72,9 +69,6 @@ export function LadderTracker({ rungs, persistenceKey, autoStart = false, onDone
           </p>
           <p className="text-6xl font-black text-emerald-400">
             {current.reps} L + {current.reps} R
-          </p>
-          <p className="text-zinc-400 tabular-nums">
-            Rest since last rung: {formatClock(restSec)}
           </p>
           <button
             type="button"

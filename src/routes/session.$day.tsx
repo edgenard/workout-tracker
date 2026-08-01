@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { Link, createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { EmomTimer } from '#/components/EmomTimer'
+import { IntervalTracker } from '#/components/IntervalTracker'
 import { LadderTracker } from '#/components/LadderTracker'
 import { RepsCheck } from '#/components/RepsCheck'
 import { SetTracker } from '#/components/SetTracker'
@@ -13,7 +14,7 @@ import { presentationSettingsStore, workoutFormatPresentationKey } from '#/lib/p
 import { activeSessionStore, clearActiveSession, saveWorkout, startSession, updateActiveSession, workoutRuntimeKey, workoutsStore } from '#/lib/store'
 import { usePersistedState } from '#/lib/usePersistedState'
 import { formatClock, useStopwatch } from '#/lib/useStopwatch'
-import type { DayId, Emom, ExerciseTrainingPlan, Ladder, RepsAndSets, Workout, WorkoutItem } from '#/lib/types'
+import type { DayId, Emom, ExerciseTrainingPlan, Interval, Ladder, RepsAndSets, Workout, WorkoutItem } from '#/lib/types'
 import type { ActiveSessionState, LoggedResult } from '#/lib/store'
 import type { PlaybackChunk } from '#/lib/planText'
 import type { CountdownCueConfig } from '#/lib/countdownCue'
@@ -172,7 +173,7 @@ function ActiveSession({ session }: { session: ActiveSessionState }) {
 }
 
 function SelfPacedStep({ plan, logged, autoStart, transitionSeconds, result, timerDone, persistenceKey, countdownConfig, onTimerDone, onResult }: {
-  plan: ExerciseTrainingPlan<Emom | RepsAndSets | Ladder>
+  plan: ExerciseTrainingPlan<Emom | RepsAndSets | Ladder | Interval>
   logged: boolean
   autoStart: boolean
   transitionSeconds: number | undefined
@@ -198,6 +199,7 @@ function SelfPacedStep({ plan, logged, autoStart, transitionSeconds, result, tim
     {currentPhase.kind === 'emom' && <EmomTimer totalMinutes={currentPhase.duration} repsText={`${currentPhase.targetReps} reps`} minuteLabel={exercise.id === 'tgu' ? (minute) => minute % 2 === 0 ? 'Right' : 'Left' : undefined} minuteAudioSources={exercise.id === 'tgu' ? TGU_MINUTE_AUDIO : undefined} persistenceKey={`${persistenceKey}:emom`} autoStart={autoStart} countdownConfig={countdownConfig} onDone={(ms) => record(emomRepsDone(currentPhase, ms))} />}
     {currentPhase.kind === 'repsAndSets' && <SetTracker sets={currentPhase.sets} repsText={`${currentPhase.reps} reps${currentPhase.perSide ? ' per side' : ''}`} persistenceKey={`${persistenceKey}:sets`} autoStart={autoStart} onDone={(completed) => record(repsAndSetsRepsDone(currentPhase, completed))} />}
     {currentPhase.kind === 'ladder' && <LadderTracker rungs={ladderRungs(currentPhase)} persistenceKey={`${persistenceKey}:ladder`} autoStart={autoStart} onDone={(completed) => record(ladderRepsDone(currentPhase, completed))} />}
+    {currentPhase.kind === 'interval' && <IntervalTracker workSeconds={currentPhase.workSeconds} restSeconds={currentPhase.restSeconds} reps={currentPhase.reps} persistenceKey={`${persistenceKey}:interval`} autoStart={autoStart} onDone={record} />}
     {logged && (timerDone || result !== undefined ? <RepsCheck targetReps={goal} value={result} onChange={onResult} /> : <p className="pt-2 text-center text-sm text-zinc-500">Finish (or end) the timer to record how many reps you completed.</p>)}
   </div>
 }

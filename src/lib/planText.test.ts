@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_WORKOUTS } from './movementData'
-import { chunkWorkoutItems, emomRepsDone, ladderRepsDone, repsAndSetsRepsDone, targetReps } from './planText'
-import type { Emom, Ladder, RepsAndSets } from './types'
+import { chunkWorkoutItems, emomRepsDone, formatTarget, ladderRepsDone, repsAndSetsRepsDone, targetReps } from './planText'
+import type { Emom, Interval, Ladder, RepsAndSets } from './types'
 
 function phaseAt<T>(items: typeof DEFAULT_WORKOUTS.a.coreWorkout, index: number): T {
   const item = items[index]!
@@ -27,6 +27,18 @@ describe('completed rep parity', () => {
     expect(emomRepsDone(swing, 8 * 60_000)).toBe(80)
     expect(ladderRepsDone(cleanPress, 2)).toBe(10)
     expect(repsAndSetsRepsDone(splitSquat, 3)).toBe(30)
+  })
+})
+
+describe('interval format', () => {
+  const tabata: Interval = { kind: 'interval', variant: 'standard', workSeconds: 20, restSeconds: 10, reps: 8 }
+
+  it('targets one rep per work/rest round', () => {
+    expect(targetReps(tabata)).toBe(8)
+  })
+
+  it('describes the work/rest structure', () => {
+    expect(formatTarget('Burpees', tabata)).toBe('Burpees — 8 rounds (20s on / 10s off)')
   })
 })
 

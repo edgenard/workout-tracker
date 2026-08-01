@@ -3,7 +3,7 @@ import { DEFAULT_WORKOUTS } from './movementData'
 import { formatTarget, targetReps } from './planText'
 import { resetPresentationSettings } from './presentationSettings'
 import { recordedLoad } from './volume'
-import type { DayId, Emom, Ladder, RepsAndSets, Workout, WorkoutLogEntry, WorkoutSettingsState } from './types'
+import type { DayId, Emom, Interval, Ladder, RepsAndSets, Workout, WorkoutLogEntry, WorkoutSettingsState } from './types'
 
 const WORKOUTS_KEY = 'workout-tracker:workouts:v1'
 const HISTORY_KEY = 'workout-tracker:history:v1'
@@ -36,6 +36,7 @@ function isPhase(value: unknown): boolean {
     case 'emom': return typeof value.duration === 'number' && typeof value.targetReps === 'number'
     case 'repsAndSets': return typeof value.reps === 'number' && typeof value.sets === 'number'
     case 'ladder': return typeof value.ladderTop === 'number' && typeof value.ladders === 'number' && (value.direction === 'up' || value.direction === 'down')
+    case 'interval': return typeof value.workSeconds === 'number' && typeof value.restSeconds === 'number' && typeof value.reps === 'number'
     default: return false
   }
 }
@@ -164,7 +165,7 @@ export function setWorkoutSettings(next: WorkoutSettingsState): void {
 export interface LoggedResult {
   movementId: string
   movementName: string
-  phase: Emom | RepsAndSets | Ladder
+  phase: Emom | RepsAndSets | Ladder | Interval
   repsDone: number
 }
 
@@ -182,6 +183,7 @@ export function saveWorkout(day: DayId, results: Array<LoggedResult>): void {
         targetReps: goal,
         repsDone: result.repsDone,
         ...recordedLoad(result.phase.equipment),
+        ...(result.phase.kind === 'interval' ? { tensionSecondsPerRep: result.phase.workSeconds } : {}),
       }
     }),
   }

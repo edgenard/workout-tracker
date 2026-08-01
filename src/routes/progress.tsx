@@ -7,7 +7,7 @@ import { DAY_INFO } from '#/lib/plan'
 import { historyStore, setWorkoutSettings, settingsStore } from '#/lib/store'
 import { entryVolume, formatVolume, progressMetricLabel, progressValue } from '#/lib/volume'
 import type { Movement, MovementResult, WorkoutLogEntry } from '#/lib/types'
-import type { ProgressKind } from '#/lib/volume'
+import type { ProgressKind, ProgressMetric } from '#/lib/volume'
 
 export const Route = createFileRoute('/progress')({
   component: Progress,
@@ -39,6 +39,7 @@ interface MovementOption {
   key: string
   label: string
   kind: ProgressKind
+  metric: ProgressMetric
 }
 
 function movementName(id: string, movements: Array<Movement>): string {
@@ -58,6 +59,7 @@ function movementOption(result: MovementResult, movements: Array<Movement>): Mov
     key: progress.key,
     label: `${movementName(result.movement, movements)}${suffix}`,
     kind: progress.kind,
+    metric: progress.metric,
   }
 }
 
@@ -80,7 +82,7 @@ function Progress() {
   const metricLabel =
     movement === 'all'
       ? 'output'
-      : progressMetricLabel(selectedOption?.kind ?? 'weighted', settings.displayUnit)
+      : progressMetricLabel(selectedOption?.kind ?? 'weighted', selectedOption?.metric ?? 'reps', settings.displayUnit)
 
   const { series, runningTotals } = useMemo(() => {
     const entries = [...history]
@@ -510,7 +512,7 @@ function VolumeChart({
                     </span>
                     <span className="tabular-nums">
                       {formatVolume(progress.value)}{' '}
-                      {progressMetricLabel(progress.kind, displayUnit)}
+                      {progressMetricLabel(progress.kind, progress.metric, displayUnit)}
                     </span>
                   </li>
                 ))}

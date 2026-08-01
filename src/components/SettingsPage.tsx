@@ -9,6 +9,7 @@ import { resetAllData, setWorkout, workoutsStore } from '#/lib/store'
 import type { CountdownCueConfig } from '#/lib/countdownCue'
 import type { DayId, Emom, ExerciseTrainingPlan, Movement, Timed, TrainingFormat, Workout, WorkoutItem } from '#/lib/types'
 
+
 const numberInput = 'w-20 rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-center font-semibold'
 const textInput = 'min-w-48 rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-1.5 font-semibold'
 const selectInput = 'rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-1.5 font-semibold'
@@ -30,6 +31,7 @@ function defaultPhase(kind: TrainingFormat['kind'], previous: TrainingFormat): T
     case 'emom': return { ...base, kind, duration: 10, targetReps: 5 }
     case 'repsAndSets': return { ...base, kind, reps: 10, sets: 3 }
     case 'ladder': return { ...base, kind, ladderTop: 3, ladders: 3, direction: 'down' }
+    case 'interval': return { ...base, kind, workSeconds: 20, restSeconds: 10, reps: 8 }
     case 'timed': return { ...base, kind, duration: 60, cues: [] }
   }
 }
@@ -163,7 +165,7 @@ function MovementSelect({ value, movements, onChange }: { value: string; movemen
 }
 
 function FormatSelect({ value, onChange }: { value: TrainingFormat['kind']; onChange: (kind: TrainingFormat['kind']) => void }) {
-  return <label className="flex items-center gap-2 text-sm">Format <select className={selectInput} value={value} onChange={(event) => onChange(event.target.value as TrainingFormat['kind'])}><option value="timed">Timed</option><option value="emom">EMOM</option><option value="repsAndSets">Reps & sets</option><option value="ladder">Ladder</option></select></label>
+  return <label className="flex items-center gap-2 text-sm">Format <select className={selectInput} value={value} onChange={(event) => onChange(event.target.value as TrainingFormat['kind'])}><option value="timed">Timed</option><option value="emom">EMOM</option><option value="repsAndSets">Reps & sets</option><option value="ladder">Ladder</option><option value="interval">Interval</option></select></label>
 }
 
 function VariantInput({ value, suggestions, onChange }: { value: string; suggestions: readonly string[] | undefined; onChange: (variant: string) => void }) {
@@ -179,6 +181,7 @@ function PhaseEditor({ phase, suggestions, countdownConfig, onCountdownConfigCha
       {phase.kind === 'emom' && <><NumberField label="Reps/min" value={phase.targetReps} onChange={(targetReps) => onChange({ ...phase, targetReps })} /><NumberField label="Minutes" value={phase.duration} onChange={(duration) => onChange({ ...phase, duration })} /></>}
       {phase.kind === 'repsAndSets' && <><NumberField label="Reps" value={phase.reps} onChange={(reps) => onChange({ ...phase, reps })} /><NumberField label="Sets" value={phase.sets} onChange={(sets) => onChange({ ...phase, sets })} /></>}
       {phase.kind === 'ladder' && <><NumberField label="Ladder top" value={phase.ladderTop} onChange={(ladderTop) => onChange({ ...phase, ladderTop })} /><NumberField label="Ladders" value={phase.ladders} onChange={(ladders) => onChange({ ...phase, ladders })} /><label className="flex items-center gap-2 text-sm">Direction <select className={selectInput} value={phase.direction} onChange={(event) => onChange({ ...phase, direction: event.target.value as 'up' | 'down' })}><option value="down">Down</option><option value="up">Up</option></select></label></>}
+      {phase.kind === 'interval' && <><NumberField label="Work sec" value={phase.workSeconds} onChange={(workSeconds) => onChange({ ...phase, workSeconds })} /><NumberField label="Rest sec" value={phase.restSeconds} onChange={(restSeconds) => onChange({ ...phase, restSeconds })} /><NumberField label="Reps" value={phase.reps} onChange={(reps) => onChange({ ...phase, reps })} /></>}
       {phase.kind === 'timed' && <><NumberField label="Seconds" value={phase.duration} onChange={(duration) => onChange({ ...phase, duration })} /><label className="flex items-center gap-2 text-sm">Cue beeps <input className={textInput} placeholder="e.g. 30, 60" value={phase.cues.join(', ')} onChange={(event) => onChange({ ...phase, cues: event.target.value.split(',').map(Number).filter((value) => Number.isFinite(value) && value > 0) })} /></label></>}
       {(phase.kind === 'timed' || phase.kind === 'emom') && countdownConfig && onCountdownConfigChange && <CountdownCueFields phase={phase} config={countdownConfig} onChange={onCountdownConfigChange} />}
       <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!phase.perSide} onChange={(event) => onChange({ ...phase, perSide: event.target.checked || undefined })} /> Per side</label>

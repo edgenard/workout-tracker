@@ -46,7 +46,14 @@ export interface Ladder extends BaseTrainingFormat {
   direction: 'up' | 'down'
 }
 
-export type TrainingFormat = RepsAndSets | Emom | Timed | Ladder
+export interface Interval extends BaseTrainingFormat {
+  kind: 'interval'
+  workSeconds: number
+  restSeconds: number
+  reps: number
+}
+
+export type TrainingFormat = RepsAndSets | Emom | Timed | Ladder | Interval
 
 export interface Transition {
   kind: 'transition'
@@ -80,6 +87,8 @@ export interface MovementResult {
   repsDone?: number
   weight?: number
   unit?: WeightUnit
+  /** Seconds of work per rep, present only for interval-format results; drives time-under-tension volume. */
+  tensionSecondsPerRep?: number
 }
 
 export interface WorkoutLogEntry {

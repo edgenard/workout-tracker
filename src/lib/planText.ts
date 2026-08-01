@@ -1,4 +1,4 @@
-import type { Emom, ExerciseTrainingPlan, Ladder, RepsAndSets, TrainingFormat, Transition, WorkoutItem } from './types'
+import type { Emom, ExerciseTrainingPlan, Interval, Ladder, RepsAndSets, TrainingFormat, Transition, WorkoutItem } from './types'
 
 function ladderSequence(phase: Ladder): Array<number> {
   const asc = Array.from({ length: phase.ladderTop }, (_, i) => i + 1)
@@ -20,6 +20,7 @@ export function targetReps(phase: TrainingFormat): number {
       case 'repsAndSets': return phase.reps * phase.sets
       case 'emom': return phase.targetReps * phase.duration
       case 'ladder': return ladderRungs(phase).reduce((sum, rung) => sum + rung.reps, 0)
+      case 'interval': return phase.reps
       case 'timed': return 0
     }
   })()
@@ -32,6 +33,7 @@ export function formatTarget(movementName: string, phase: TrainingFormat): strin
     case 'repsAndSets': return `${prefix}${movementName} — ${phase.sets} sets × ${phase.reps} reps${phase.perSide ? ' per side' : ''}`
     case 'emom': return `${prefix}${movementName} — ${phase.targetReps} reps EMOM × ${phase.duration} min (${targetReps(phase)} total)`
     case 'ladder': return `${prefix}${movementName} — ${ladderSequence(phase).join('-')} ladder × ${phase.ladders}${phase.perSide ? ' per side' : ''} (${targetReps(phase)} total)`
+    case 'interval': return `${prefix}${movementName} — ${phase.reps} rounds (${phase.workSeconds}s on / ${phase.restSeconds}s off)`
     case 'timed': return `${prefix}${movementName} — ${phase.duration}s`
   }
 }
@@ -54,7 +56,7 @@ export function ladderRepsDone(phase: Ladder, completedRungs: number): number {
 export interface TimedRunChunk { kind: 'timedRun'; items: Array<WorkoutItem> }
 export interface SelfPacedChunk {
   kind: 'selfPaced'
-  plan: ExerciseTrainingPlan<Emom | RepsAndSets | Ladder>
+  plan: ExerciseTrainingPlan<Emom | RepsAndSets | Ladder | Interval>
   upNext?: Transition
 }
 export type PlaybackChunk = TimedRunChunk | SelfPacedChunk
@@ -75,7 +77,7 @@ export function chunkWorkoutItems(items: Array<WorkoutItem>): Array<PlaybackChun
     const last = run.at(-1)
     const upNext = last && !('currentPhase' in last) ? (run.pop() as Transition) : undefined
     flushRun()
-    chunks.push({ kind: 'selfPaced', plan: item as ExerciseTrainingPlan<Emom | RepsAndSets | Ladder>, upNext })
+    chunks.push({ kind: 'selfPaced', plan: item as ExerciseTrainingPlan<Emom | RepsAndSets | Ladder | Interval>, upNext })
   }
   flushRun()
   return chunks

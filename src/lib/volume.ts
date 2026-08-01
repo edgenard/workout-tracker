@@ -8,10 +8,12 @@ export function convertWeight(value: number, from: WeightUnit, to: WeightUnit): 
 }
 
 export type ProgressKind = 'bodyweight' | 'weighted'
+export type ProgressMetric = 'reps' | 'time'
 
 export interface ProgressValue {
   key: string
   kind: ProgressKind
+  metric: ProgressMetric
   value: number
 }
 
@@ -29,20 +31,24 @@ export function progressValue(
 ): ProgressValue | null {
   if (result.repsDone === undefined || result.weight === undefined) return null
 
+  const metric: ProgressMetric = result.tensionSecondsPerRep === undefined ? 'reps' : 'time'
+  const quantity = metric === 'time' ? result.repsDone * result.tensionSecondsPerRep! : result.repsDone
   const kind: ProgressKind = result.weight > 0 ? 'weighted' : 'bodyweight'
   return {
     // Split squats change from bodyweight to loaded work as they progress. Keep
     // those incomparable metrics on separate charts without changing movement IDs.
     key: result.movement === 'splitSquat' ? `${result.movement}:${kind}` : result.movement,
     kind,
+    metric,
     value:
       kind === 'bodyweight'
-        ? result.repsDone
-        : result.repsDone * convertWeight(result.weight, result.unit ?? 'kg', displayUnit),
+        ? quantity
+        : quantity * convertWeight(result.weight, result.unit ?? 'kg', displayUnit),
   }
 }
 
-export function progressMetricLabel(kind: ProgressKind, displayUnit: WeightUnit): string {
+export function progressMetricLabel(kind: ProgressKind, metric: ProgressMetric, displayUnit: WeightUnit): string {
+  if (metric === 'time') return kind === 'bodyweight' ? 'sec' : `${displayUnit}·sec`
   return kind === 'bodyweight' ? 'reps' : `${displayUnit}·reps`
 }
 
@@ -63,13 +69,13 @@ export function entryVolume(entry: WorkoutLogEntry, displayUnit: WeightUnit): nu
 }
 
 export function entryMetricLabel(entry: WorkoutLogEntry, displayUnit: WeightUnit): string {
-  const kinds = new Set(
-    entry.results
-      .map((result) => progressValue(result, displayUnit)?.kind)
-      .filter((kind): kind is ProgressKind => kind !== undefined),
-  )
-  if (kinds.size !== 1) return 'output'
-  return progressMetricLabel([...kinds][0]!, displayUnit)
+  const progressed = entry.results
+    .map((result) => progressValue(result, displayUnit))
+    .filter((progress): progress is ProgressValue => progress !== null)
+  const kinds = new Set(progressed.map((progress) => progress.kind))
+  const metrics = new Set(progressed.map((progress) => progress.metric))
+  if (kinds.size !== 1 || metrics.size !== 1) return 'output'
+  return progressMetricLabel([...kinds][0]!, [...metrics][0]!, displayUnit)
 }
 
 /** Per-movement output rows for tooltips/tables. */
